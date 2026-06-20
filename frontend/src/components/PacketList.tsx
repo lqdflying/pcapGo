@@ -19,11 +19,27 @@ export function PacketList({ packets, selectedIdx, onSelect, loading }: Props) {
     overscan: 30,
   });
 
+  // Auto-scroll to the selected packet, but only when it is OUT of view.
+  //
+  // `selectedIdx` is the ABSOLUTE packet index (pkt.idx). The virtualizer,
+  // however, indexes into the current page's `packets` array (0..length-1), so
+  // we must translate before calling scrollToIndex — passing the absolute index
+  // would scroll to a clamped (top/bottom) position on filtered/paginated views,
+  // which is the cause of the "click doesn't highlight until I scroll" bug.
+  //
+  // We also skip scrolling entirely when the row is already rendered, so an
+  // in-view click never yanks the viewport around.
   useEffect(() => {
-    if (selectedIdx !== null) {
-      virtualizer.scrollToIndex(selectedIdx, { align: "center" });
+    if (selectedIdx === null) return;
+    const arrayIdx = packets.findIndex((p) => p.idx === selectedIdx);
+    if (arrayIdx < 0) return; // selection is on another page; nothing to scroll
+    const visible = virtualizer
+      .getVirtualItems()
+      .some((vi) => vi.index === arrayIdx);
+    if (!visible) {
+      virtualizer.scrollToIndex(arrayIdx, { align: "center" });
     }
-  }, [selectedIdx]);
+  }, [selectedIdx, packets, virtualizer]);
 
   const protoClass = (proto: string) => {
     switch (proto.toLowerCase()) {

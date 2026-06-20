@@ -107,6 +107,25 @@ class IOBucket(BaseModel):
     byte_count: int
 
 
+class FollowStreamSegment(BaseModel):
+    # "client" = packets from the requested src endpoint, "server" = the reverse.
+    direction: str
+    ts: float
+    # Raw payload bytes, base64-encoded so the client can render hex or ASCII.
+    data_b64: str
+    length: int
+
+
+class FollowStreamResponse(BaseModel):
+    proto: str
+    client: str  # "ip:port" of the requested source endpoint
+    server: str  # "ip:port" of the requested destination endpoint
+    segments: list[FollowStreamSegment]
+    client_bytes: int
+    server_bytes: int
+    truncated: bool
+
+
 class StatisticsResponse(BaseModel):
     capture_id: uuid.UUID
     packet_count: int

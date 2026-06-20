@@ -39,6 +39,19 @@ describe("Uploader", () => {
     expect(mockOnUpload).toHaveBeenCalledWith(file);
   });
 
+  it("calls onUpload for a tcpdump rotated suffix (.pcap0)", () => {
+    const { container } = render(<Uploader onUpload={mockOnUpload} uploading={false} />);
+    const dropZone = container.querySelector("div")!;
+
+    const file = new File([new ArrayBuffer(100)], "capture.pcap0", {
+      type: "application/octet-stream",
+    });
+    const dataTransfer = { files: [file], items: [], types: [] };
+
+    fireEvent.drop(dropZone, { dataTransfer });
+    expect(mockOnUpload).toHaveBeenCalledWith(file);
+  });
+
   it("does NOT call onUpload for invalid extension", () => {
     const { container } = render(<Uploader onUpload={mockOnUpload} uploading={false} />);
     const dropZone = container.querySelector("div")!;

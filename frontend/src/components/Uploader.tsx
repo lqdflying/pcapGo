@@ -6,6 +6,11 @@ interface Props {
   uploading: boolean;
 }
 
+// Accept .pcap/.pcapng/.cap plus tcpdump rotated suffixes (e.g. capture.pcap0,
+// dump.pcap-01, x.cap2). Mirrors the server-side guardrail; the backend's
+// magic-byte check is the authoritative validation.
+const CAPTURE_NAME_RE = /\.(pcapng|pcap|cap)[-_.]?\d*$/i;
+
 export function Uploader({ onUpload, uploading }: Props) {
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -15,7 +20,7 @@ export function Uploader({ onUpload, uploading }: Props) {
       e.preventDefault();
       setDragOver(false);
       const file = e.dataTransfer.files[0];
-      if (file && (file.name.endsWith(".pcap") || file.name.endsWith(".pcapng") || file.name.endsWith(".cap"))) {
+      if (file && CAPTURE_NAME_RE.test(file.name)) {
         onUpload(file);
       }
     },
@@ -52,7 +57,6 @@ export function Uploader({ onUpload, uploading }: Props) {
       <input
         ref={inputRef}
         type="file"
-        accept=".pcap,.pcapng,.cap"
         onChange={handleChange}
         className="hidden"
         aria-label="Choose pcap file"

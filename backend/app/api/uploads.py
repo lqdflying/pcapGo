@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import re
 import tempfile
 import uuid
 from pathlib import Path
@@ -36,6 +37,12 @@ _PCAP_MAGIC = {
 
 _CHUNK = 1024 * 1024  # 1 MB streaming chunks
 
+# Accept .pcap/.pcapng/.cap plus tcpdump rotated suffixes (capture.pcap0,
+# dump.pcap-01, x.cap2, y.pcapng1, ...). The extension is only a guardrail —
+# the pcap magic-byte check below is the authoritative content validation, so
+# any trailing digits/separators a rotation scheme appends are allowed.
+_CAPTURE_NAME_RE = re.compile(r"\.(pcapng|pcap|cap)[-_.]?\d*$", re.IGNORECASE)
+
 
 @router.post("", response_model=CaptureRead)
 async def upload_capture(
@@ -43,8 +50,11 @@ async def upload_capture(
     file: UploadFile = File(...),
     user: User = Depends(get_current_user),
 ):
-    if not file.filename or not file.filename.lower().endswith((".pcap", ".pcapng", ".cap")):
-        raise HTTPException(status_code=400, detail="Only .pcap, .pcapng, .cap files accepted")
+    if not file.filename or not _CAPTURE_NAME_RE.search(file.filename):
+        raise HTTPException(
+            status_code=400,
+            detail="Only .pcap, .pcapng, .cap files (including rotated suffixes like .pcap0) accepted",
+        )
 
     user_dir = Path(settings.upload_dir) / str(user.id)
     user_dir.mkdir(parents=True, exist_ok=True)

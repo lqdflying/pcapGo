@@ -10,13 +10,23 @@ import uuid
 from collections import OrderedDict
 from pathlib import Path
 
+import csv
+import io
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 
 from app.db.session import async_session
 from app.models import User, Capture, CaptureStatus
 from app.core.security import get_current_user
-from app.schemas.capture import PacketSummary, PacketDetail, PacketListResponse
+from app.schemas.capture import (
+    PacketSummary,
+    PacketDetail,
+    PacketListResponse,
+    FollowStreamResponse,
+)
+from app.services.follow import follow_stream_sync
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +52,8 @@ _INDEX_CACHE: OrderedDict[tuple[str, int, int], dict] = OrderedDict()
 # itself is offloaded to a worker thread so the event loop is not blocked by a
 # large sequential read.
 _FILTER_CACHE_MAX_BYTES = 64 * 1024 * 1024  # 64 MB
-_FILTER_CACHE: OrderedDict[tuple[str, int, int, str], array.array] = OrderedDict()
+# Keyed by (offsets_path, mtime_ns, size, proto, q).
+_FILTER_CACHE: OrderedDict[tuple[str, int, int, str, str], array.array] = OrderedDict()
 _FILTER_CACHE_BYTES = 0
 
 
@@ -188,13 +199,14 @@ async def list_packets(
     offset: int = Query(0, ge=0),
     limit: int = Query(200, ge=1, le=10000),
     proto: str = Query("", description="Filter by protocol: tcp, udp, icmp, etc."),
+    q: str = Query("", description="Case-insensitive substring match on src/dst/info/proto."),
     user: User = Depends(get_current_user),
 ):
     """Paginated packet list.
 
-    Pagination applies to the **filtered** set: when ``proto`` is set, ``total``
-    reflects the count of matching packets (not the total in the capture), and
-    ``offset``/``limit`` slice into that filtered set.
+    Pagination applies to the **filtered** set: when ``proto`` and/or ``q`` are
+    set, ``total`` reflects the count of matching packets (not the total in the
+    capture), and ``offset``/``limit`` slice into that filtered set.
 
     The unfiltered path is O(limit): it reads ``limit`` binary offset entries
     then seeks+reads only those summary lines. The filtered path scans
@@ -207,10 +219,11 @@ async def list_packets(
     offsets_path = _offsets_path_for(capture)
     summary_path = _summary_path_for(capture)
     proto_filter = proto.strip().lower()
+    q_filter = q.strip().lower()
 
-    if proto_filter:
+    if proto_filter or q_filter:
         matching_indices = await _get_filtered_indices(
-            offsets_path, summary_path, proto_filter
+            offsets_path, summary_path, proto_filter, q_filter
         )
         filtered_total = len(matching_indices)
         page_indices = matching_indices[offset : offset + limit]
@@ -246,8 +259,28 @@ async def list_packets(
     )
 
 
+def _summary_matches(s: dict, proto_filter: str, q_filter: str) -> bool:
+    """Whether a summary record matches the proto and/or text filters.
+
+    ``proto_filter`` matches the packet proto or detected app proto exactly.
+    ``q_filter`` is a case-insensitive substring tested against src, dst, info,
+    proto and app_proto. Empty filters are treated as "match anything".
+    """
+    pkt_proto = (s.get("proto") or "").lower()
+    app_proto = (s.get("app_proto") or "").lower()
+    if proto_filter and not (pkt_proto == proto_filter or app_proto == proto_filter):
+        return False
+    if q_filter:
+        haystack = " ".join(
+            str(s.get(k, "")) for k in ("src", "dst", "info", "proto", "app_proto")
+        ).lower()
+        if q_filter not in haystack:
+            return False
+    return True
+
+
 def _scan_filtered_indices_sync(
-    offsets_path: str, summary_path: str, proto_filter: str
+    offsets_path: str, summary_path: str, proto_filter: str, q_filter: str
 ) -> array.array:
     """Synchronous scan of summary.jsonl; returns matching packet indices."""
     try:
@@ -255,7 +288,7 @@ def _scan_filtered_indices_sync(
     except OSError:
         raise HTTPException(status_code=500, detail="Packet index file missing")
 
-    cache_key = (offsets_path, stat.st_mtime_ns, stat.st_size, proto_filter)
+    cache_key = (offsets_path, stat.st_mtime_ns, stat.st_size, proto_filter, q_filter)
     cached = _FILTER_CACHE.get(cache_key)
     if cached is not None:
         _FILTER_CACHE.move_to_end(cache_key)
@@ -278,9 +311,7 @@ def _scan_filtered_indices_sync(
                 except json.JSONDecodeError:
                     idx += 1
                     continue
-                pkt_proto = (s.get("proto") or "").lower()
-                app_proto = (s.get("app_proto") or "").lower()
-                if pkt_proto == proto_filter or app_proto == proto_filter:
+                if _summary_matches(s, proto_filter, q_filter):
                     matching.append(idx)
                 idx += 1
     except FileNotFoundError:
@@ -298,16 +329,16 @@ def _scan_filtered_indices_sync(
 
 
 async def _get_filtered_indices(
-    offsets_path: str, summary_path: str, proto_filter: str
+    offsets_path: str, summary_path: str, proto_filter: str, q_filter: str
 ) -> array.array:
-    """Scan summary.jsonl once for packets matching proto_filter.
+    """Scan summary.jsonl once for packets matching the proto and/or text filter.
 
     Results are cached in a byte-bounded LRU keyed by (offsets_path, mtime,
-    size, proto). The scan itself runs in a worker thread so large sequential
+    size, proto, q). The scan itself runs in a worker thread so large sequential
     reads do not block the event loop.
     """
     return await asyncio.to_thread(
-        _scan_filtered_indices_sync, offsets_path, summary_path, proto_filter
+        _scan_filtered_indices_sync, offsets_path, summary_path, proto_filter, q_filter
     )
 
 
@@ -357,4 +388,142 @@ async def get_packet_detail(
         layers=record.get("layers", []),
         raw_hex=record.get("raw_hex", ""),
         raw_offset=record.get("raw_offset", 0),
+    )
+
+
+@router.get("/{capture_id}/follow", response_model=FollowStreamResponse)
+async def follow_stream(
+    capture_id: uuid.UUID,
+    src_ip: str = Query(...),
+    src_port: int = Query(..., ge=0, le=65535),
+    dst_ip: str = Query(...),
+    dst_port: int = Query(..., ge=0, le=65535),
+    proto: str = Query(..., description="tcp or udp"),
+    user: User = Depends(get_current_user),
+):
+    """Reconstruct a single TCP/UDP conversation's payload (Follow Stream).
+
+    Re-reads the original capture on disk (in a worker thread) and returns the
+    transport payloads of the requested 5-tuple, split into client/server
+    directions in capture order. Payload is capped per direction to bound the
+    response size.
+    """
+    proto_l = proto.strip().lower()
+    if proto_l not in ("tcp", "udp"):
+        raise HTTPException(status_code=422, detail="proto must be 'tcp' or 'udp'")
+
+    capture = await _get_capture(capture_id, user)
+    if not capture.stored_path or not Path(capture.stored_path).exists():
+        raise HTTPException(status_code=404, detail="Capture file is no longer available")
+
+    try:
+        result = await asyncio.to_thread(
+            follow_stream_sync,
+            capture.stored_path,
+            proto_l,
+            src_ip,
+            src_port,
+            dst_ip,
+            dst_port,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception:
+        logger.exception("follow_stream failed for capture %s", capture_id)
+        raise HTTPException(status_code=500, detail="Failed to reconstruct stream")
+
+    return FollowStreamResponse(**result)
+
+
+_EXPORT_COLUMNS = ["idx", "ts", "src", "dst", "proto", "length", "info"]
+
+
+@router.get("/{capture_id}/export")
+async def export_packets(
+    capture_id: uuid.UUID,
+    format: str = Query("csv", description="csv or json"),
+    proto: str = Query(""),
+    q: str = Query(""),
+    user: User = Depends(get_current_user),
+):
+    """Stream the (optionally filtered) packet list as CSV or JSON.
+
+    Honors the same ``proto``/``q`` filters as the list endpoint so the export
+    matches what the user currently sees. The response is streamed so large
+    captures never get fully buffered in memory; the sync generator is run in a
+    threadpool by Starlette, keeping the event loop free.
+    """
+    fmt = format.strip().lower()
+    if fmt not in ("csv", "json"):
+        raise HTTPException(status_code=422, detail="format must be 'csv' or 'json'")
+
+    capture = await _get_capture(capture_id, user)
+    _load_packet_index(capture)  # validates the index exists
+    offsets_path = _offsets_path_for(capture)
+    summary_path = _summary_path_for(capture)
+    proto_filter = proto.strip().lower()
+    q_filter = q.strip().lower()
+
+    if proto_filter or q_filter:
+        indices: list[int] | None = list(
+            await _get_filtered_indices(offsets_path, summary_path, proto_filter, q_filter)
+        )
+    else:
+        indices = None
+
+    def iter_records():
+        if indices is None:
+            try:
+                with open(summary_path, encoding="utf-8") as f:
+                    for line in f:
+                        try:
+                            yield json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+            except FileNotFoundError:
+                return
+        else:
+            for i in indices:
+                off = _read_single_offset(offsets_path, i)
+                if off is None:
+                    continue
+                s = _read_summary_at(summary_path, off[1])
+                if s:
+                    yield s
+
+    if fmt == "csv":
+        def gen_csv():
+            buf = io.StringIO()
+            writer = csv.writer(buf)
+            writer.writerow(_EXPORT_COLUMNS)
+            yield buf.getvalue()
+            buf.seek(0)
+            buf.truncate(0)
+            for s in iter_records():
+                writer.writerow([s.get(c, "") for c in _EXPORT_COLUMNS])
+                yield buf.getvalue()
+                buf.seek(0)
+                buf.truncate(0)
+
+        media_type = "text/csv"
+        body = gen_csv()
+        filename = f"packets-{capture_id}.csv"
+    else:
+        def gen_json():
+            yield "["
+            first = True
+            for s in iter_records():
+                rec = {c: s.get(c) for c in _EXPORT_COLUMNS}
+                yield ("" if first else ",") + json.dumps(rec, ensure_ascii=False)
+                first = False
+            yield "]"
+
+        media_type = "application/json"
+        body = gen_json()
+        filename = f"packets-{capture_id}.json"
+
+    return StreamingResponse(
+        body,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

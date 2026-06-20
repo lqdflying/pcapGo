@@ -163,3 +163,35 @@ class TestMigration0001:
         assert "fwd_packet_count" in column_names
         assert "fwd_byte_count" in column_names
         assert "evidence_json" in column_names
+
+
+class TestMigration0002:
+    """The chat-threads migration must exist and define the chat tables."""
+
+    def test_migration_version_exists(self):
+        root = Path(__file__).parent.parent.parent
+        migration_path = (
+            root / "backend" / "alembic" / "versions" / "0002_chat_threads.py"
+        )
+        assert migration_path.exists()
+
+    def test_chat_tables_defined_in_metadata(self):
+        table_names = set(Base.metadata.tables.keys())
+        assert "chat_threads" in table_names
+        assert "chat_messages" in table_names
+
+    def test_chat_threads_columns(self):
+        table = Base.metadata.tables["chat_threads"]
+        column_names = {c.name for c in table.columns}
+        assert {"id", "capture_id", "title", "created_at"}.issubset(column_names)
+        fk_cols = [c.name for c in table.columns if c.foreign_keys]
+        assert "capture_id" in fk_cols
+
+    def test_chat_messages_columns(self):
+        table = Base.metadata.tables["chat_messages"]
+        column_names = {c.name for c in table.columns}
+        assert {"id", "thread_id", "role", "content", "created_at"}.issubset(
+            column_names
+        )
+        fk_cols = [c.name for c in table.columns if c.foreign_keys]
+        assert "thread_id" in fk_cols

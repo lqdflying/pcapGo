@@ -125,6 +125,23 @@ export interface StatisticsResponse {
   metric: "packets" | "bytes";
 }
 
+export interface FollowStreamSegment {
+  direction: "client" | "server";
+  ts: number;
+  data_b64: string;
+  length: number;
+}
+
+export interface FollowStreamResponse {
+  proto: string;
+  client: string;
+  server: string;
+  segments: FollowStreamSegment[];
+  client_bytes: number;
+  server_bytes: number;
+  truncated: boolean;
+}
+
 export interface AnalysisIssue {
   type: string;
   severity: "low" | "medium" | "high" | "critical";
@@ -138,6 +155,27 @@ export interface AnalysisEvent {
   dst: string;
   summary_markdown: string;
   issues: AnalysisIssue[];
+}
+
+export interface ChatThread {
+  id: string;
+  title: string;
+  created_at: string;
+  message_count: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+}
+
+export interface ChatThreadDetail {
+  id: string;
+  title: string;
+  created_at: string;
+  messages: ChatMessage[];
 }
 
 export interface PacketListEnvelope {
@@ -184,12 +222,28 @@ export async function getPackets(
   captureId: string,
   offset: number = 0,
   limit: number = 200,
-  proto: string = ""
+  proto: string = "",
+  q: string = ""
 ): Promise<PacketListEnvelope> {
   const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
   if (proto) params.set("proto", proto);
+  if (q) params.set("q", q);
   const { data } = await api.get(`/api/captures/${captureId}/packets?${params}`);
   return data;
+}
+
+// Build the export URL so the browser can download it directly (the cookie
+// auth rides along on the GET). Honors the active proto/q filters.
+export function packetsExportUrl(
+  captureId: string,
+  format: "csv" | "json",
+  proto: string = "",
+  q: string = ""
+): string {
+  const params = new URLSearchParams({ format });
+  if (proto) params.set("proto", proto);
+  if (q) params.set("q", q);
+  return `/api/captures/${captureId}/export?${params}`;
 }
 
 export async function getPacketDetail(
@@ -197,6 +251,110 @@ export async function getPacketDetail(
   packetIdx: number
 ): Promise<PacketDetail> {
   const { data } = await api.get(`/api/captures/${captureId}/packets/${packetIdx}`);
+  return data;
+}
+
+// ── AI chat (conversation management) ───────────────────────────────────────
+
+export async function listChatThreads(captureId: string): Promise<ChatThread[]> {
+  const { data } = await api.get(`/api/captures/${captureId}/threads`);
+  return data;
+}
+
+export async function createChatThread(
+  captureId: string,
+  title?: string
+): Promise<ChatThread> {
+  const { data } = await api.post(`/api/captures/${captureId}/threads`, {
+    title: title ?? null,
+  });
+  return data;
+}
+
+export async function getChatThread(
+  captureId: string,
+  threadId: string
+): Promise<ChatThreadDetail> {
+  const { data } = await api.get(`/api/captures/${captureId}/threads/${threadId}`);
+  return data;
+}
+
+export async function deleteChatThread(
+  captureId: string,
+  threadId: string
+): Promise<void> {
+  await api.delete(`/api/captures/${captureId}/threads/${threadId}`);
+}
+
+// Stream an assistant reply over SSE using fetch (EventSource can't POST). The
+// caller passes an AbortSignal so a Stop button can cancel mid-generation; the
+// server detects the disconnect and persists the partial answer.
+export async function streamChatMessage(
+  captureId: string,
+  threadId: string,
+  content: string,
+  opts: {
+    signal?: AbortSignal;
+    onDelta: (text: string) => void;
+    onError?: (message: string) => void;
+  }
+): Promise<void> {
+  const resp = await fetch(
+    `/api/captures/${captureId}/threads/${threadId}/messages`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+      credentials: "include",
+      signal: opts.signal,
+    }
+  );
+  if (!resp.ok || !resp.body) {
+    opts.onError?.("Request failed");
+    return;
+  }
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buffer.indexOf("\n\n")) >= 0) {
+      const frame = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 2);
+      const line = frame.replace(/^data:\s?/, "");
+      if (line === "[DONE]") return;
+      try {
+        const obj = JSON.parse(line);
+        if (obj.delta) opts.onDelta(obj.delta);
+        else if (obj.error) opts.onError?.(obj.error);
+      } catch {
+        // ignore malformed frame
+      }
+    }
+  }
+}
+
+export async function getFollowStream(
+  captureId: string,
+  params: {
+    src_ip: string;
+    src_port: number;
+    dst_ip: string;
+    dst_port: number;
+    proto: string;
+  }
+): Promise<FollowStreamResponse> {
+  const query = new URLSearchParams({
+    src_ip: params.src_ip,
+    src_port: String(params.src_port),
+    dst_ip: params.dst_ip,
+    dst_port: String(params.dst_port),
+    proto: params.proto,
+  });
+  const { data } = await api.get(`/api/captures/${captureId}/follow?${query}`);
   return data;
 }
 

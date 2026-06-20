@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, act } from "@testing-library/react";
+import { render, screen, act, fireEvent } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CapturePage } from "@/pages/Capture";
@@ -15,6 +15,7 @@ vi.mock("@/api/client", () => ({
   getPackets: vi.fn().mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200 }),
   getPacketDetail: vi.fn().mockResolvedValue(null),
   getStatistics: vi.fn().mockResolvedValue(null),
+  packetsExportUrl: vi.fn().mockReturnValue("/api/captures/test/export?format=csv"),
 }));
 
 // Mock store
@@ -93,6 +94,25 @@ describe("CapturePage", () => {
       renderCapturePage();
     });
     expect(screen.getByLabelText("Filter by protocol")).toBeInTheDocument();
+  });
+
+  it("shows the packet search box and CSV export link in packets view", async () => {
+    await act(async () => {
+      renderCapturePage();
+    });
+    expect(await screen.findByLabelText("Search packets")).toBeInTheDocument();
+    expect(screen.getByLabelText("Export packets as CSV")).toBeInTheDocument();
+  });
+
+  it("updates the search box value as the user types", async () => {
+    await act(async () => {
+      renderCapturePage();
+    });
+    const input = (await screen.findByLabelText("Search packets")) as HTMLInputElement;
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "10.0.0.5" } });
+    });
+    expect(input.value).toBe("10.0.0.5");
   });
 
   it("shows pagination controls in packets view", async () => {

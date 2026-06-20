@@ -2,14 +2,16 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { ArrowLeft, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, Loader2, ChevronLeft, ChevronRight, Search, Download } from "lucide-react";
 import {
   getPackets,
   getPacketDetail,
   getStatistics,
+  packetsExportUrl,
   type Capture,
   type PacketSummary,
   type PacketDetail,
+  type ConversationStats,
 } from "../api/client";
 import { api } from "../api/client";
 import { useCaptureStore } from "../lib/store";
@@ -18,6 +20,7 @@ import { PacketTree } from "../components/PacketTree";
 import { HexViewer } from "../components/HexViewer";
 import { StatsTabs } from "../components/StatsTabs";
 import { AIAnalysisPanel } from "../components/AIAnalysisPanel";
+import { FollowStream } from "../components/FollowStream";
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200, 500];
 const PROTOCOL_OPTIONS = [
@@ -46,6 +49,15 @@ export function CapturePage() {
   const [highlight, setHighlight] = useState<{ offset: number; length: number } | null>(null);
   const [bucketSeconds, setBucketSeconds] = useState(1);
   const [ioMetric, setIoMetric] = useState<"packets" | "bytes">("packets");
+  const [search, setSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [followConv, setFollowConv] = useState<ConversationStats | null>(null);
+
+  // Debounce the search box so typing doesn't fire a request per keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => setAppliedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
   const captureQuery = useQuery<Capture>({
     queryKey: ["capture", id],
@@ -61,8 +73,9 @@ export function CapturePage() {
   });
 
   const packetsQuery = useQuery({
-    queryKey: ["packets", id, filterProto, page, pageSize],
-    queryFn: () => getPackets(id!, page * pageSize, pageSize, filterProto),
+    queryKey: ["packets", id, filterProto, appliedSearch, page, pageSize],
+    queryFn: () =>
+      getPackets(id!, page * pageSize, pageSize, filterProto, appliedSearch),
     enabled: captureQuery.data?.status === "ready",
   });
 
@@ -77,10 +90,10 @@ export function CapturePage() {
     enabled: viewMode === "stats" && captureQuery.data?.status === "ready",
   });
 
-  // Reset to first page when filter or page size changes.
+  // Reset to first page when filter, search or page size changes.
   useEffect(() => {
     setPage(0);
-  }, [filterProto, pageSize]);
+  }, [filterProto, appliedSearch, pageSize]);
 
   useEffect(() => {
     if (selectedPacketIdx === null || !id) return;
@@ -93,13 +106,20 @@ export function CapturePage() {
 
   const capture = captureQuery.data;
 
-  const handleSelectEndpoint = (_ip: string) => {
-    // Future: could filter packets by endpoint IP. For now, switch to packets view.
+  const applySearch = (value: string) => {
+    setSearch(value);
+    setAppliedSearch(value); // apply immediately (skip the debounce) for clicks
+  };
+
+  const handleSelectEndpoint = (ip: string) => {
+    applySearch(ip);
     setViewMode("packets");
   };
 
-  const handleSelectConversation = (_conv: { src_ip: string; dst_ip: string }) => {
-    // Future: could filter packets to this conversation. For now, switch to packets view.
+  const handleSelectConversation = (conv: ConversationStats) => {
+    // q is a single substring, so filter by the source host — shows all packets
+    // involving that endpoint of the conversation.
+    applySearch(conv.src_ip);
     setViewMode("packets");
   };
 
@@ -147,20 +167,41 @@ export function CapturePage() {
             ))}
           </div>
 
-          {/* Protocol filter dropdown */}
+          {/* Packet search, protocol filter, export */}
           {viewMode === "packets" && (
-            <select
-              aria-label="Filter by protocol"
-              value={filterProto}
-              onChange={(e) => setFilterProto(e.target.value)}
-              className="rounded border border-panel-border bg-panel-bg px-2 py-1 text-xs text-panel-text focus:border-panel-accent focus:outline-none"
-            >
-              {PROTOCOL_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+            <>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2 top-1.5 h-3.5 w-3.5 text-panel-muted" />
+                <input
+                  aria-label="Search packets"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search src/dst/info…"
+                  className="w-52 rounded border border-panel-border bg-panel-bg py-1 pl-7 pr-2 text-xs text-panel-text focus:border-panel-accent focus:outline-none"
+                />
+              </div>
+              <select
+                aria-label="Filter by protocol"
+                value={filterProto}
+                onChange={(e) => setFilterProto(e.target.value)}
+                className="rounded border border-panel-border bg-panel-bg px-2 py-1 text-xs text-panel-text focus:border-panel-accent focus:outline-none"
+              >
+                {PROTOCOL_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <a
+                href={packetsExportUrl(id!, "csv", filterProto, appliedSearch)}
+                download
+                aria-label="Export packets as CSV"
+                title="Export current view as CSV"
+                className="inline-flex items-center gap-1 rounded border border-panel-border px-2 py-1 text-xs text-panel-text transition hover:bg-panel-border"
+              >
+                <Download className="h-3.5 w-3.5" /> CSV
+              </a>
+            </>
           )}
         </div>
       </header>
@@ -261,6 +302,7 @@ export function CapturePage() {
                 loading={statsQuery.isLoading}
                 onSelectEndpoint={handleSelectEndpoint}
                 onSelectConversation={handleSelectConversation}
+                onFollowConversation={setFollowConv}
                 onBucketChange={handleBucketChange}
               />
             </div>
@@ -272,6 +314,14 @@ export function CapturePage() {
             </div>
           )}
         </>
+      )}
+
+      {followConv && (
+        <FollowStream
+          captureId={id!}
+          conversation={followConv}
+          onClose={() => setFollowConv(null)}
+        />
       )}
     </div>
   );
