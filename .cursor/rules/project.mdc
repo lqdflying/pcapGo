@@ -15,37 +15,37 @@ pcapGo/
 ├── docker-compose.yml         # SAMPLE: single-container prod compose (copy into a host deploy dir)
 ├── backend/                   # FastAPI (Python 3.12)
 │   ├── app/
-│   │   ├── api/               # Route handlers (auth, uploads, packets, statistics, analysis)
+│   │   ├── api/               # Route handlers (auth, uploads, packets, statistics, analysis, chat)
 │   │   ├── core/              # Security helpers (JWT cookie auth)
 │   │   ├── db/                # Async engine, session, Base
-│   │   ├── models/            # SQLAlchemy ORM models (User, Capture, Conversation, Analysis)
+│   │   ├── models/            # ORM models (User, Capture, Conversation, Analysis, ChatThread, ChatMessage)
 │   │   ├── schemas/           # Pydantic v2 response models
-│   │   └── services/          # pcap_parser (scapy), flows, LLM
-│   ├── alembic/               # DB migrations (single revision 0001_initial.py)
+│   │   └── services/          # pcap_parser (scapy), flows, follow (stream recon), llm
+│   ├── alembic/               # DB migrations (0001_initial, 0002_chat_threads)
 │   ├── pytest.ini             # pytest config (testpaths points to ../tests/backend)
 │   ├── Dockerfile             # Backend-only build (test compose)
 │   ├── entrypoint.sh          # Runs alembic upgrade head then starts uvicorn
 │   └── requirements.txt
 ├── frontend/                  # React 18 + TypeScript + Vite + Tailwind CSS
 │   ├── src/
-│   │   ├── api/               # Axios API client + TypeScript interfaces
-│   │   ├── components/        # Uploader, PacketList, PacketTree, HexViewer, StatsTabs, AIAnalysisPanel
+│   │   ├── api/               # Axios API client + fetch-based chat streaming + TS interfaces
+│   │   ├── components/        # Uploader, PacketList, PacketTree, HexViewer, StatsTabs, AIAnalysisPanel, FollowStream
 │   │   ├── lib/               # Zustand stores (useAuthStore, useCaptureStore)
 │   │   ├── pages/             # Login, Dashboard, Capture
-│   │   ├── __tests__/         # vitest tests (12 test files)
+│   │   ├── __tests__/         # vitest tests (13 test files)
 │   │   └── test-setup.ts      # symlink to src/__tests__/test-setup.ts
 │   └── vite.config.ts         # Includes vitest config (setupFiles + globals)
 ├── tests/
 │   ├── .env.example           # Test/dev env template (full 3-container local stack)
 │   ├── Dockerfile.nginx       # Multi-stage frontend + nginx build (test compose)
 │   ├── docker-compose.yml     # 3-container test stack (postgres + web + nginx)
-│   └── backend/               # pytest tests (~170 total)
+│   └── backend/               # pytest tests (~250 total)
 │       ├── conftest.py        # Shared async fixtures, sys.path patch
 │       ├── api/               # Integration tests (httpx.AsyncClient + ASGITransport)
 │       ├── models/            # Model CRUD tests
 │       ├── services/          # Service-level tests (currently empty)
-│       ├── unit/              # Pure unit tests
-│       └── test_migrations.py
+│       ├── unit/              # Pure unit tests (LLM normalization, etc.)
+│       └── test_migrations.py # Migration 0001 + 0002 metadata + roundtrip
 ├── nginx/nginx.conf           # Nginx proxy config; explicitly does NOT serve /uploads
 ├── uploads/                   # Per-user pcap files and JSONL/index sidecars
 ├── wiki/                      # GitHub wiki (separate git repo)
@@ -75,16 +75,18 @@ Production mode pulls the pre-built Harbor image, which bundles the React SPA in
 ## Database
 - Engine: `postgresql+asyncpg`
 - Session: `async_sessionmaker` with `expire_on_commit=False`
-- Models: `User`, `Capture` (status enum: uploaded/parsing/ready/failed), `Conversation`, `Analysis`
-- Migrations: Alembic in `backend/alembic/`
+- Models: `User`, `Capture` (status enum: uploaded/parsing/ready/failed), `Conversation`, `Analysis`, `ChatThread`, `ChatMessage`
+- Migrations: Alembic in `backend/alembic/` (0001 initial, 0002 chat threads)
 
 ## Key Conventions
 - All Python files start with `from __future__ import annotations`.
-- All API routes return Pydantic response models except `/api/captures/{id}/ai` (SSE `StreamingResponse`).
+- All API routes return Pydantic response models except the SSE endpoints: `/api/captures/{id}/ai` (full analysis) and `/api/captures/{id}/threads/{tid}/messages` (chat) — both `StreamingResponse` with `media_type="text/event-stream"`.
 - Uploads are streamed to a temp file, validated by pcap magic bytes, then atomically renamed to `uploads/<user_id>/<capture_id>.pcap`.
-- Parsing runs as a FastAPI `BackgroundTask` and is offloaded to a worker thread with `asyncio.to_thread`.
+- Parsing runs as a FastAPI `BackgroundTask` and is offloaded to a worker thread with `asyncio.to_thread`. It writes four sidecars: `.jsonl`, `.summary.jsonl`, `.offsets.bin` (binary offset pairs), `.index.json`.
 - Captures never expose `/uploads/` via StaticFiles or nginx; files are served only through authenticated API routes.
 - Auth is cookie-based via `pcap_session` containing a JWT (configurable lifetime via `JWT_EXPIRE_MINUTES`).
+- Every capture-scoped endpoint enforces ownership (`Capture.user_id == user.id`); chat threads additionally check the thread belongs to the capture.
+- Follow Stream and the proto/`q` packet filter re-read sidecars / the pcap in worker threads (`asyncio.to_thread`) so large reads never block the event loop.
 - `DATABASE_URL` controls the DB connection.
 - Settings are loaded via Pydantic `BaseSettings` with `.env` file support and `extra="ignore"`.
 
@@ -129,8 +131,8 @@ cd frontend && npm run typecheck:test
 Test DB: `postgresql+asyncpg://pcap:pcap@localhost:5432/pcap_test`
 
 ### Test Coverage Summary
-- **Backend**: ~170 tests (unit + integration + migrations) — requires PostgreSQL
-- **Frontend**: 12 test files (95 tests) — self-contained, no server needed
+- **Backend**: ~250 tests (unit + integration + migrations) — requires PostgreSQL
+- **Frontend**: 13 test files (117 tests) — self-contained, no server needed
 - **Test frameworks**: pytest + pytest-asyncio (backend), vitest + @testing-library/react (frontend)
 
 ## Environment Variables

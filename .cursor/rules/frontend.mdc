@@ -16,21 +16,24 @@ cd frontend && npm install && npm run dev
 Runs on `http://localhost:5173`, proxies `/api` and `/auth` to backend at `localhost:8000`.
 
 ## Key Components
-- `Uploader` — drag-and-drop pcap file upload (accepts `.pcap`, `.pcapng`, `.cap`).
-- `PacketList` — virtualized packet list with protocol filter and pagination controls.
+- `Uploader` — drag-and-drop pcap file upload (accepts `.pcap`, `.pcapng`, `.cap`, including tcpdump rotated suffixes).
+- `PacketList` — virtualized packet list with protocol filter, substring search box, and pagination controls.
 - `PacketTree` — expandable protocol layer tree; clicking a layer highlights its bytes in `HexViewer`.
 - `HexViewer` — hex/ASCII dump of selected packet with highlighted layer byte ranges.
-- `StatsTabs` — protocol hierarchy, endpoints (Tx/Rx), conversations, IO graph (bucket/metric controls).
-- `AIAnalysisPanel` — per-conversation AI diagnostic summaries via SSE; LLM output is rendered as escaped text (no `dangerouslySetInnerHTML`).
+- `StatsTabs` — protocol hierarchy, endpoints (Tx/Rx), conversations, IO graph (bucket/metric controls); click an endpoint/conversation to filter the packet list.
+- `FollowStream` — modal that reconstructs one TCP/UDP conversation's payload (ASCII or hex view), client vs server color-coded; truncation banner when the 1 MB/direction cap is hit.
+- `AIAnalysisPanel` — per-conversation AI diagnostic summaries via SSE; also hosts the chat UI (thread list, message input, Stop button). LLM output is rendered as escaped text (no `dangerouslySetInnerHTML`).
 
 ## Pages
 - `Login` — probes `/auth/me` on mount; GitHub OAuth redirect via `/auth/github/login`.
 - `Dashboard` — upload area + captures list with status polling and delete confirmation.
-- `Capture` — 3-pane inspector with view mode toggle (Packets / Statistics / AI Analysis), protocol dropdown, and pagination.
+- `Capture` — 3-pane inspector with view mode toggle (Packets / Statistics / AI Analysis), protocol dropdown, substring search, CSV/JSON export buttons, and Follow Stream launch from a conversation row.
 
 ## API Client
 - `frontend/src/api/client.ts` exports an axios instance (`baseURL: "/"`, `withCredentials: true`) and typed helpers for all backend endpoints.
 - The axios interceptor hard-redirects to `/login` on 401 unless already on `/login`.
+- Chat streaming uses `fetch` + a `ReadableStream` reader (not `EventSource`, which can't POST) so the caller can pass an `AbortSignal` for the Stop button; SSE frames are split on `\n\n` and `[DONE]` terminates the stream.
+- `packetsExportUrl(...)` builds a direct browser-download URL (cookie auth rides along on the GET) honoring active `proto`/`q` filters.
 - Pages use TanStack Query for data fetching, caching, and invalidation.
 
 ## State Management
@@ -63,8 +66,8 @@ cd frontend && npm run typecheck           # App TypeScript check
 cd frontend && npm run typecheck:test      # Test TypeScript check
 ```
 
-Tests live in `frontend/src/__tests__/`, organized by `components/`, `pages/`, `api/`, and `lib/`. 12 test files cover:
-- **Components** (6): Uploader, PacketList, PacketTree, HexViewer, StatsTabs, AIAnalysisPanel
+Tests live in `frontend/src/__tests__/`, organized by `components/`, `pages/`, `api/`, and `lib/`. 13 test files cover:
+- **Components** (7): Uploader, PacketList, PacketTree, HexViewer, StatsTabs, AIAnalysisPanel, FollowStream
 - **Pages** (3): Login, Dashboard, Capture
 - **App router** (1): routing based on auth state
 - **Pure logic** (2): API client (axios), Zustand stores

@@ -51,9 +51,12 @@ Use `make_minimal_pcap_bytes()` helper (defined in `tests/backend/api/test_uploa
 - 24-byte global header + 16-byte packet header + 60-byte payload.
 - Valid magic number (0xA1B2C3D4), version 2.4, Ethernet linktype.
 
-### Packet/Stats/Analysis Tests
-- Write fake `.index.json` + `.jsonl` files to disk for parsed captures.
-- Mock `analyze_conversation` for AI analysis tests.
+### Packet/Stats/Analysis/Chat/Follow Tests
+- Write fake sidecars with `_write_fake_sidecars(index_path, summaries)` (in `tests/backend/api/test_packets.py`) — it writes all four files: `.index.json`, `.summary.jsonl`, `.offsets.bin` (binary `<QQ` offset pairs), and `.jsonl`. Clean up with `_cleanup_sidecars(index_path)`.
+- Chat tests: mock `app.api.chat.chat_stream` with a fake async generator (`_fake_stream_factory(*deltas, raise_after=False)`); enable the LLM via `monkeypatch` on `settings.llm_api_key`. Assert SSE deltas, `[DONE]`, partial-answer persistence on error, and cascade delete of threads/messages.
+- Follow tests: write a real two-way TCP conversation pcap with scapy `wrpcap` (`_write_tcp_conversation`), then assert both directions reconstruct; also unit-test `follow_stream_sync` directly with a small `max_bytes` to assert truncation.
+- Export tests: assert CSV header + rows, JSON array shape, filter honoring, and 422 on bad format.
+- Mock `analyze_conversation` for the full AI analysis tests.
 - Mock `settings.llm_api_key` with `monkeypatch` for LLM config tests.
 - Clean up temp files in `finally` blocks.
 
@@ -74,7 +77,7 @@ cd frontend && npm run typecheck
 cd frontend && npm run typecheck:test
 ```
 
-### Test Structure (12 test files under `frontend/src/__tests__/`)
+### Test Structure (13 test files under `frontend/src/__tests__/`)
 ```
 frontend/src/__tests__/
 ├── test-setup.ts                # Global mocks + mock data factories
@@ -89,7 +92,8 @@ frontend/src/__tests__/
 │   ├── PacketTree.test.tsx      # Protocol layer tree expand/collapse + layer selection highlights hex
 │   ├── HexViewer.test.tsx       # Hex/ASCII dump formatting + highlighted byte ranges
 │   ├── StatsTabs.test.tsx       # Statistics tab navigation + Tx/Rx columns + IO graph controls
-│   └── AIAnalysisPanel.test.tsx # SSE event parsing + rendering
+│   ├── AIAnalysisPanel.test.tsx # SSE event parsing + rendering
+│   └── FollowStream.test.tsx    # Follow-stream modal: ASCII/hex view + client/server coloring
 └── pages/
     ├── Login.test.tsx           # Unauthenticated redirect to GitHub
     ├── Dashboard.test.tsx       # Upload + captures list + delete confirmation
@@ -187,15 +191,19 @@ vi.mock("@/api/client", () => ({
 }));
 ```
 
-#### SSE Testing (AIAnalysisPanel)
+#### SSE Testing (AIAnalysisPanel + Chat)
 ```typescript
-// EventSource is mocked globally in test-setup.ts
-// Dispatch events to simulate SSE stream
+// AIAnalysisPanel uses EventSource (mocked globally in test-setup.ts):
 const eventSource = window.EventSource.mock.instances[0];
 eventSource.onmessage({ data: JSON.stringify(createMockAnalysisEvent()) });
 // Verify rendered output
 expect(screen.getByText("Diagnostic summary text")).toBeInTheDocument();
 ```
+
+Chat streaming uses `fetch` + `ReadableStream` (not `EventSource`), so chat tests mock the
+client's `streamChatMessage` helper or assert on the rendered thread/message state rather
+than dispatching `EventSource` events. The backend chat tests (pytest) mock
+`app.api.chat.chat_stream` with a fake async generator and assert the SSE body text.
 
 ### Writing New Frontend Tests
 1. Place test files in `frontend/src/__tests__/`, mirroring the source structure.
