@@ -48,7 +48,7 @@ describe("PacketList", () => {
 
   it("renders column headers", () => {
     render(
-      <PacketList packets={[]} selectedIdx={null} onSelect={mockOnSelect} loading={false} />
+      <PacketList packets={[]} selectedIdx={null} selectedSet={new Set()} onSelect={mockOnSelect} loading={false} />
     );
     expect(screen.getByText("No.")).toBeInTheDocument();
     expect(screen.getByText("Time")).toBeInTheDocument();
@@ -68,7 +68,7 @@ describe("PacketList", () => {
 
   it("renders without crashing with empty packets", () => {
     const { container } = render(
-      <PacketList packets={[]} selectedIdx={null} onSelect={mockOnSelect} loading={false} />
+      <PacketList packets={[]} selectedIdx={null} selectedSet={new Set()} onSelect={mockOnSelect} loading={false} />
     );
     expect(container).toBeTruthy();
   });
@@ -77,7 +77,7 @@ describe("PacketList", () => {
     virtualCount = packets.length;
     visibleIndices = [0, 1, 2];
     const { container } = render(
-      <PacketList packets={packets} selectedIdx={null} onSelect={mockOnSelect} loading={false} />
+      <PacketList packets={packets} selectedIdx={null} selectedSet={new Set()} onSelect={mockOnSelect} loading={false} />
     );
     const virtualContainer = container.querySelector('[style*="position: relative"]');
     expect(virtualContainer).toBeTruthy();
@@ -87,17 +87,17 @@ describe("PacketList", () => {
     virtualCount = packets.length;
     visibleIndices = [0, 1, 2];
     render(
-      <PacketList packets={packets} selectedIdx={null} onSelect={mockOnSelect} loading={false} />
+      <PacketList packets={packets} selectedIdx={null} selectedSet={new Set()} onSelect={mockOnSelect} loading={false} />
     );
     fireEvent.click(screen.getByText("DNS query"));
-    expect(mockOnSelect).toHaveBeenCalledWith(1);
+    expect(mockOnSelect).toHaveBeenCalledWith(1, "single", [0, 1, 2]);
   });
 
   it("marks the selected row with tr-selected / aria-selected", () => {
     virtualCount = packets.length;
     visibleIndices = [0, 1, 2];
     render(
-      <PacketList packets={packets} selectedIdx={2} onSelect={mockOnSelect} loading={false} />
+      <PacketList packets={packets} selectedIdx={2} selectedSet={new Set([2])} onSelect={mockOnSelect} loading={false} />
     );
     const selected = screen.getByText("Echo request").closest('[role="row"]')!;
     expect(selected).toHaveAttribute("aria-selected", "true");
@@ -108,7 +108,7 @@ describe("PacketList", () => {
     virtualCount = packets.length;
     visibleIndices = [0, 1, 2];
     render(
-      <PacketList packets={packets} selectedIdx={1} onSelect={mockOnSelect} loading={false} />
+      <PacketList packets={packets} selectedIdx={1} selectedSet={new Set([1])} onSelect={mockOnSelect} loading={false} />
     );
     expect(scrollToIndex).not.toHaveBeenCalled();
   });
@@ -118,7 +118,7 @@ describe("PacketList", () => {
     virtualCount = pageTwoPackets.length;
     visibleIndices = [0];
     render(
-      <PacketList packets={pageTwoPackets} selectedIdx={102} onSelect={mockOnSelect} loading={false} />
+      <PacketList packets={pageTwoPackets} selectedIdx={102} selectedSet={new Set([102])} onSelect={mockOnSelect} loading={false} />
     );
     expect(scrollToIndex).toHaveBeenCalledWith(2, { align: "center" });
     expect(scrollToIndex).not.toHaveBeenCalledWith(102, expect.anything());
@@ -128,7 +128,7 @@ describe("PacketList", () => {
     virtualCount = packets.length;
     visibleIndices = [0, 1, 2];
     render(
-      <PacketList packets={packets} selectedIdx={999} onSelect={mockOnSelect} loading={false} />
+      <PacketList packets={packets} selectedIdx={999} selectedSet={new Set()} onSelect={mockOnSelect} loading={false} />
     );
     expect(scrollToIndex).not.toHaveBeenCalled();
   });

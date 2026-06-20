@@ -54,6 +54,52 @@ enough information to answer, say so rather than inventing packet details.
 - Be concise and use plain language. Markdown is fine."""
 
 
+EXPLAIN_SYSTEM_PROMPT = """You are a network protocol expert embedded in a Wireshark-like tool. \
+The user has selected one or more packets from a capture and wants you to explain them.
+
+For the selected packets, provide:
+1. A clear summary of what is happening in these packets (protocol, purpose, data flow).
+2. Notable observations: retransmissions, errors, unusual flags, latency, anomalies.
+3. If the packets form part of a conversation (e.g. TCP handshake, DNS query/response), \
+explain the sequence and state transitions.
+
+Be concise. Use markdown for formatting. Ground your analysis in the packet data provided."""
+
+
+async def explain_packets_stream(
+    context: str,
+    packets_block: str,
+) -> AsyncIterator[str]:
+    """Stream a one-shot explanation of selected packets."""
+    client = _get_client()
+
+    messages: list[dict] = [
+        {
+            "role": "system",
+            "content": f"{EXPLAIN_SYSTEM_PROMPT}\n\n## Capture context\n{context}",
+        },
+        {
+            "role": "user",
+            "content": f"Explain these selected packets:\n\n{packets_block}",
+        },
+    ]
+
+    stream = await client.chat.completions.create(
+        model=settings.llm_model,
+        messages=messages,
+        temperature=0.3,
+        stream=True,
+    )
+    async for chunk in stream:
+        choices = getattr(chunk, "choices", None)
+        if not choices:
+            continue
+        delta = getattr(choices[0], "delta", None)
+        text = getattr(delta, "content", None) if delta else None
+        if text:
+            yield text
+
+
 async def chat_stream(
     context: str,
     history: list[dict],

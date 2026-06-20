@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { useAuthStore, useCaptureStore } from "@/lib/store";
+import { useAuthStore, useCaptureStore, useThemeStore } from "@/lib/store";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 function createMockUser(overrides = {}) {
@@ -75,11 +75,37 @@ describe("useAuthStore", () => {
   });
 });
 
+// ── useThemeStore ──────────────────────────────────────────────────────────
+describe("useThemeStore", () => {
+  beforeEach(() => {
+    useThemeStore.setState({ theme: "dark" });
+    document.documentElement.removeAttribute("data-theme");
+  });
+
+  it("defaults to dark", () => {
+    expect(useThemeStore.getState().theme).toBe("dark");
+  });
+
+  it("setTheme('obsidian') updates state and data-theme attribute", () => {
+    useThemeStore.getState().setTheme("obsidian");
+
+    expect(useThemeStore.getState().theme).toBe("obsidian");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("obsidian");
+  });
+
+  it("setTheme('light') persists to localStorage", () => {
+    useThemeStore.getState().setTheme("light");
+    expect(localStorage.getItem("pcapgo-theme")).toBe("light");
+  });
+});
+
 // ── useCaptureStore ─────────────────────────────────────────────────────────
 describe("useCaptureStore", () => {
   beforeEach(() => {
     useCaptureStore.setState({
       selectedPacketIdx: null,
+      selectedIndices: [],
+      lastClickedIdx: null,
       filterProto: "",
     });
   });
@@ -130,5 +156,41 @@ describe("useCaptureStore", () => {
 
     useCaptureStore.getState().setFilterProto("icmp");
     expect(useCaptureStore.getState().filterProto).toBe("icmp");
+  });
+
+  // ── Multi-select tests ──────────────────────────────────────────────────
+
+  it("selectPacket single mode sets selectedIndices to [idx]", () => {
+    useCaptureStore.getState().selectPacket(5, "single");
+    const state = useCaptureStore.getState();
+    expect(state.selectedIndices).toEqual([5]);
+    expect(state.selectedPacketIdx).toBe(5);
+  });
+
+  it("selectPacket toggle adds and removes", () => {
+    const { selectPacket } = useCaptureStore.getState();
+    selectPacket(5, "single");
+    useCaptureStore.getState().selectPacket(7, "toggle");
+    expect(useCaptureStore.getState().selectedIndices).toEqual([5, 7]);
+
+    useCaptureStore.getState().selectPacket(5, "toggle");
+    expect(useCaptureStore.getState().selectedIndices).toEqual([7]);
+    expect(useCaptureStore.getState().selectedPacketIdx).toBe(5);
+  });
+
+  it("selectPacket range selects inclusive range over page indices", () => {
+    const pageIndices = [1, 3, 5, 7, 9];
+    useCaptureStore.getState().selectPacket(3, "single", pageIndices);
+    useCaptureStore.getState().selectPacket(7, "range", pageIndices);
+    expect(useCaptureStore.getState().selectedIndices).toEqual([3, 5, 7]);
+  });
+
+  it("clearSelection resets everything", () => {
+    useCaptureStore.getState().selectPacket(5, "single");
+    useCaptureStore.getState().clearSelection();
+    const state = useCaptureStore.getState();
+    expect(state.selectedPacketIdx).toBeNull();
+    expect(state.selectedIndices).toEqual([]);
+    expect(state.lastClickedIdx).toBeNull();
   });
 });

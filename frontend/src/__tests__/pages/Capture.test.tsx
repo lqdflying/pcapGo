@@ -86,7 +86,6 @@ describe("CapturePage", () => {
     });
     expect(await screen.findByText("Packets")).toBeInTheDocument();
     expect(screen.getByText("Statistics")).toBeInTheDocument();
-    expect(screen.getByText("AI Analysis")).toBeInTheDocument();
   });
 
   it("shows protocol filter dropdown in packets view", async () => {

@@ -54,11 +54,19 @@ export interface PacketSummary {
   info: string;
 }
 
+export interface FieldNode {
+  name: string;
+  value: string;
+  offset: number | null;
+  length: number | null;
+}
+
 export interface LayerNode {
   name: string;
   summary: string;
   offset: number;
   length: number;
+  fields: FieldNode[];
   children: LayerNode[];
 }
 
@@ -297,14 +305,19 @@ export async function streamChatMessage(
     signal?: AbortSignal;
     onDelta: (text: string) => void;
     onError?: (message: string) => void;
+    packetIndices?: number[];
   }
 ): Promise<void> {
+  const body: Record<string, unknown> = { content };
+  if (opts.packetIndices?.length) {
+    body.packet_indices = opts.packetIndices;
+  }
   const resp = await fetch(
     `/api/captures/${captureId}/threads/${threadId}/messages`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify(body),
       credentials: "include",
       signal: opts.signal,
     }
@@ -313,6 +326,15 @@ export async function streamChatMessage(
     opts.onError?.("Request failed");
     return;
   }
+  await readSSE(resp, opts.onDelta, opts.onError);
+}
+
+async function readSSE(
+  resp: Response,
+  onDelta: (text: string) => void,
+  onError?: (message: string) => void
+): Promise<void> {
+  if (!resp.body) return;
   const reader = resp.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -328,13 +350,39 @@ export async function streamChatMessage(
       if (line === "[DONE]") return;
       try {
         const obj = JSON.parse(line);
-        if (obj.delta) opts.onDelta(obj.delta);
-        else if (obj.error) opts.onError?.(obj.error);
+        if (obj.delta) onDelta(obj.delta);
+        else if (obj.error) onError?.(obj.error);
       } catch {
         // ignore malformed frame
       }
     }
   }
+}
+
+export async function streamExplainPackets(
+  captureId: string,
+  indices: number[],
+  opts: {
+    signal?: AbortSignal;
+    onDelta: (text: string) => void;
+    onError?: (message: string) => void;
+  }
+): Promise<void> {
+  const resp = await fetch(
+    `/api/captures/${captureId}/explain`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ indices }),
+      credentials: "include",
+      signal: opts.signal,
+    }
+  );
+  if (!resp.ok) {
+    opts.onError?.("Request failed");
+    return;
+  }
+  await readSSE(resp, opts.onDelta, opts.onError);
 }
 
 export async function getFollowStream(

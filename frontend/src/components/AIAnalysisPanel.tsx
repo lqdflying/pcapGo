@@ -18,6 +18,7 @@ import {
   getChatThread,
   deleteChatThread,
   streamChatMessage,
+  streamExplainPackets,
   type AnalysisEvent,
   type ChatThread,
   type ChatMessage,
@@ -25,9 +26,10 @@ import {
 
 interface Props {
   captureId: string;
+  selectedIndices?: number[];
 }
 
-export function AIAnalysisPanel({ captureId }: Props) {
+export function AIAnalysisPanel({ captureId, selectedIndices = [] }: Props) {
   // ── Chat state ────────────────────────────────────────────────────────────
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
@@ -42,6 +44,12 @@ export function AIAnalysisPanel({ captureId }: Props) {
   // activeThreadId effect would otherwise run (it would clobber the local
   // optimistic messages with an empty list).
   const suppressLoadRef = useRef<string | null>(null);
+
+  // ── Explain-selected state ──────────────────────────────────────────────────
+  const [explainText, setExplainText] = useState("");
+  const [explainStreaming, setExplainStreaming] = useState(false);
+  const explainAbortRef = useRef<AbortController | null>(null);
+  const [attachedIndices, setAttachedIndices] = useState<number[]>([]);
 
   // ── Full-analysis (one-shot) state ──────────────────────────────────────────
   const [events, setEvents] = useState<AnalysisEvent[]>([]);
@@ -145,6 +153,7 @@ export function AIAnalysisPanel({ captureId }: Props) {
           setStreamingText(acc);
         },
         onError: (m) => setChatError(m),
+        packetIndices: attachedIndices.length > 0 ? attachedIndices : undefined,
       });
     } catch {
       // Aborted or network error — keep whatever streamed so far.
@@ -161,7 +170,8 @@ export function AIAnalysisPanel({ captureId }: Props) {
       setStreamingText("");
       setStreaming(false);
       abortRef.current = null;
-      loadThreads(); // refresh titles / counts
+      setAttachedIndices([]);
+      loadThreads();
     }
   };
 
@@ -196,6 +206,40 @@ export function AIAnalysisPanel({ captureId }: Props) {
       es.close();
     };
   }, [captureId]);
+
+  const explainSelected = useCallback(async () => {
+    if (!selectedIndices.length || explainStreaming) return;
+    setExplainText("");
+    setExplainStreaming(true);
+    const controller = new AbortController();
+    explainAbortRef.current = controller;
+    let acc = "";
+    try {
+      await streamExplainPackets(captureId, selectedIndices, {
+        signal: controller.signal,
+        onDelta: (text) => {
+          acc += text;
+          setExplainText(acc);
+        },
+        onError: (m) => setChatError(m),
+      });
+    } catch {
+      // aborted or network error
+    } finally {
+      setExplainStreaming(false);
+      explainAbortRef.current = null;
+    }
+  }, [captureId, selectedIndices, explainStreaming]);
+
+  const stopExplain = () => {
+    explainAbortRef.current?.abort();
+  };
+
+  const attachSelection = () => {
+    if (selectedIndices.length > 0) {
+      setAttachedIndices([...selectedIndices]);
+    }
+  };
 
   const severityIcon = (severity: string) => {
     switch (severity) {
@@ -333,8 +377,20 @@ export function AIAnalysisPanel({ captureId }: Props) {
             </div>
           )}
 
+          {/* Explain result */}
+          {(explainText || explainStreaming) && (
+            <div className="mb-4">
+              <p className="mb-1 text-xs font-medium text-panel-muted">Packet explanation</p>
+              <div className="rounded-xl border border-panel-border bg-panel-header/40 px-4 py-3">
+                <p className="whitespace-pre-wrap text-xs leading-relaxed text-panel-text">
+                  {explainText || <Loader2 className="h-3 w-3 animate-spin" />}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Chat messages */}
-          {messages.length === 0 && !streaming && events.length === 0 ? (
+          {messages.length === 0 && !streaming && events.length === 0 && !explainText && !explainStreaming ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <Sparkles className="mb-3 h-10 w-10 text-panel-muted/40" />
               <p className="max-w-sm text-sm text-panel-muted/60">
@@ -379,8 +435,52 @@ export function AIAnalysisPanel({ captureId }: Props) {
           )}
         </div>
 
+        {/* Selection actions */}
+        {selectedIndices.length > 0 && (
+          <div className="flex items-center gap-2 border-t border-panel-border bg-panel-header/40 px-3 py-1.5">
+            <span className="text-[11px] text-panel-muted">
+              {selectedIndices.length} packet{selectedIndices.length > 1 ? "s" : ""} selected
+            </span>
+            {explainStreaming ? (
+              <button
+                onClick={stopExplain}
+                className="inline-flex items-center gap-1 rounded bg-panel-error/20 px-2 py-0.5 text-[11px] font-medium text-panel-error hover:bg-panel-error/30"
+              >
+                <Square className="h-3 w-3" /> Stop
+              </button>
+            ) : (
+              <button
+                onClick={explainSelected}
+                className="inline-flex items-center gap-1 rounded bg-panel-accent/20 px-2 py-0.5 text-[11px] font-medium text-panel-accent hover:bg-panel-accent/30"
+              >
+                <Sparkles className="h-3 w-3" /> Explain
+              </button>
+            )}
+            <button
+              onClick={attachSelection}
+              className="inline-flex items-center gap-1 rounded bg-panel-border px-2 py-0.5 text-[11px] font-medium text-panel-text hover:bg-panel-border/80"
+            >
+              <Plus className="h-3 w-3" /> Attach to chat
+            </button>
+          </div>
+        )}
+
         {/* Input */}
         <div className="border-t border-panel-border p-3">
+          {attachedIndices.length > 0 && (
+            <div className="mb-1 flex items-center gap-1">
+              <span className="inline-flex items-center gap-1 rounded-full bg-panel-accent/15 px-2 py-0.5 text-[11px] text-panel-accent">
+                {attachedIndices.length} packet{attachedIndices.length > 1 ? "s" : ""} attached
+                <button
+                  onClick={() => setAttachedIndices([])}
+                  className="ml-0.5 rounded-full hover:bg-panel-accent/20"
+                  aria-label="Remove attached packets"
+                >
+                  ×
+                </button>
+              </span>
+            </div>
+          )}
           {chatError && (
             <p className="mb-1 text-[11px] text-panel-error">{chatError}</p>
           )}

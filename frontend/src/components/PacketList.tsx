@@ -1,15 +1,16 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { PacketSummary } from "../api/client";
 
 interface Props {
   packets: PacketSummary[];
   selectedIdx: number | null;
-  onSelect: (idx: number) => void;
+  selectedSet: Set<number>;
+  onSelect: (idx: number, mode: "single" | "toggle" | "range", pageIndices: number[]) => void;
   loading: boolean;
 }
 
-export function PacketList({ packets, selectedIdx, onSelect, loading }: Props) {
+export function PacketList({ packets, selectedIdx, selectedSet, onSelect, loading }: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
 
   const virtualizer = useVirtualizer({
@@ -19,20 +20,12 @@ export function PacketList({ packets, selectedIdx, onSelect, loading }: Props) {
     overscan: 30,
   });
 
-  // Auto-scroll to the selected packet, but only when it is OUT of view.
-  //
-  // `selectedIdx` is the ABSOLUTE packet index (pkt.idx). The virtualizer,
-  // however, indexes into the current page's `packets` array (0..length-1), so
-  // we must translate before calling scrollToIndex — passing the absolute index
-  // would scroll to a clamped (top/bottom) position on filtered/paginated views,
-  // which is the cause of the "click doesn't highlight until I scroll" bug.
-  //
-  // We also skip scrolling entirely when the row is already rendered, so an
-  // in-view click never yanks the viewport around.
+  const pageIndices = useMemo(() => packets.map((p) => p.idx), [packets]);
+
   useEffect(() => {
     if (selectedIdx === null) return;
     const arrayIdx = packets.findIndex((p) => p.idx === selectedIdx);
-    if (arrayIdx < 0) return; // selection is on another page; nothing to scroll
+    if (arrayIdx < 0) return;
     const visible = virtualizer
       .getVirtualItems()
       .some((vi) => vi.index === arrayIdx);
@@ -50,13 +43,23 @@ export function PacketList({ packets, selectedIdx, onSelect, loading }: Props) {
     }
   };
 
-  const handleKeyDown = (
-    e: React.KeyboardEvent,
-    idx: number
-  ) => {
+  const handleClick = (e: React.MouseEvent, idx: number) => {
+    const mode = e.shiftKey
+      ? "range"
+      : e.metaKey || e.ctrlKey
+        ? "toggle"
+        : "single";
+    onSelect(idx, mode, pageIndices);
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.shiftKey) e.preventDefault();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent, idx: number) => {
     if (e.key !== "Enter" && e.key !== " ") return;
     e.preventDefault();
-    onSelect(idx);
+    onSelect(idx, "single", pageIndices);
   };
 
   const formatTs = (ts: number) => {
@@ -66,7 +69,6 @@ export function PacketList({ packets, selectedIdx, onSelect, loading }: Props) {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Column headers */}
       <div className="flex items-center border-b border-panel-border bg-panel-header px-2 py-1 text-[11px] font-medium text-panel-muted select-none">
         <span className="w-12">No.</span>
         <span className="w-28">Time</span>
@@ -77,7 +79,6 @@ export function PacketList({ packets, selectedIdx, onSelect, loading }: Props) {
         <span className="flex-1">Info</span>
       </div>
 
-      {/* Virtualized rows */}
       <div ref={parentRef} className="flex-1 overflow-auto">
         {loading ? (
           <p className="p-4 text-xs text-panel-muted">Loading packets...</p>
@@ -92,7 +93,8 @@ export function PacketList({ packets, selectedIdx, onSelect, loading }: Props) {
             {virtualizer.getVirtualItems().map((virtualRow) => {
               const pkt = packets[virtualRow.index];
               if (!pkt) return null;
-              const isSelected = selectedIdx === pkt.idx;
+              const isAnchor = selectedIdx === pkt.idx;
+              const isSelected = selectedSet.has(pkt.idx);
               return (
                 <div
                   key={pkt.idx}
@@ -103,12 +105,15 @@ export function PacketList({ packets, selectedIdx, onSelect, loading }: Props) {
                   tabIndex={0}
                   className={`absolute left-0 top-0 flex w-full items-center text-[11px] cursor-pointer transition-colors hover:bg-panel-accent/5 ${
                     protoClass(pkt.proto)
-                  } ${isSelected ? "tr-selected" : ""}`}
+                  } ${isSelected ? "tr-selected" : ""} ${
+                    isAnchor ? "ring-1 ring-inset ring-panel-accent/40" : ""
+                  }`}
                   style={{
                     height: `${virtualRow.size}px`,
                     transform: `translateY(${virtualRow.start}px)`,
                   }}
-                  onClick={() => onSelect(pkt.idx)}
+                  onClick={(e) => handleClick(e, pkt.idx)}
+                  onMouseDown={handleMouseDown}
                   onKeyDown={(e) => handleKeyDown(e, pkt.idx)}
                 >
                   <span className="w-12 pl-2 text-panel-muted">{pkt.idx}</span>

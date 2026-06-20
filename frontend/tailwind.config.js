@@ -5,15 +5,15 @@ export default {
     extend: {
       colors: {
         panel: {
-          bg: "#1e1e2e",
-          header: "#181825",
-          border: "#313244",
-          text: "#cdd6f4",
-          muted: "#6c7086",
-          accent: "#89b4fa",
-          success: "#a6e3a1",
-          warning: "#f9e2af",
-          error: "#f38ba8",
+          bg: "rgb(var(--panel-bg) / <alpha-value>)",
+          header: "rgb(var(--panel-header) / <alpha-value>)",
+          border: "rgb(var(--panel-border) / <alpha-value>)",
+          text: "rgb(var(--panel-text) / <alpha-value>)",
+          muted: "rgb(var(--panel-muted) / <alpha-value>)",
+          accent: "rgb(var(--panel-accent) / <alpha-value>)",
+          success: "rgb(var(--panel-success) / <alpha-value>)",
+          warning: "rgb(var(--panel-warning) / <alpha-value>)",
+          error: "rgb(var(--panel-error) / <alpha-value>)",
         },
       },
       fontFamily: {

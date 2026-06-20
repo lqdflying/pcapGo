@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import pytest_asyncio
 import httpx
 from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -74,7 +75,7 @@ def _mock_parse_pcap(monkeypatch):
 # Database — session-scoped engine shared by app AND fixtures
 # ---------------------------------------------------------------------------
 
-@pytest.fixture(scope="session")
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def _session_engine():
     """Session-scoped async PostgreSQL engine. Patches app.db.session."""
     import app.db.session as app_db
@@ -94,7 +95,7 @@ async def _session_engine():
     await engine.dispose()
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest_asyncio.fixture(scope="session", autouse=True, loop_scope="session")
 async def _session_create_tables(_session_engine):
     """Create all tables once at session start; drop at session end."""
     from app.db.session import Base
@@ -109,7 +110,7 @@ async def _session_create_tables(_session_engine):
         await conn.run_sync(Base.metadata.drop_all)
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def _delete_all(_session_engine):
     """DELETE all rows before each test for isolation."""
     from app.db.session import Base
@@ -124,7 +125,7 @@ async def _delete_all(_session_engine):
 # DB session for model/unit tests
 # ---------------------------------------------------------------------------
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def db_session(_session_engine):
     """Yield an async SQLAlchemy session for model tests."""
     factory = async_sessionmaker(_session_engine, class_=AsyncSession, expire_on_commit=False)
@@ -136,7 +137,7 @@ async def db_session(_session_engine):
 # Test client — httpx AsyncClient
 # ---------------------------------------------------------------------------
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_client(_delete_all):
     from app.main import app
 
@@ -146,7 +147,7 @@ async def test_client(_delete_all):
         yield client
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_client_authenticated(test_client, auth_user):
     """Test client with get_current_user overridden for auth_user."""
     from app.core.security import get_current_user
@@ -218,7 +219,7 @@ def auth_user_data() -> dict[str, Any]:
     }
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def auth_user(_session_engine, auth_user_data):
     return await _make_user(_session_engine, auth_user_data)
 
@@ -245,7 +246,7 @@ def auth_headers(auth_token) -> dict[str, str]:
 # Test data factories
 # ---------------------------------------------------------------------------
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_capture(_session_engine, auth_user) -> "Capture":
     from app.models import CaptureStatus
     return await _make_capture(
@@ -265,7 +266,7 @@ async def test_capture(_session_engine, auth_user) -> "Capture":
     )
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_conversation(_session_engine, test_capture) -> "Conversation":
     return await _make_conversation(
         _session_engine,

@@ -7,6 +7,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy import select, func
 
 from app.config import settings
@@ -20,7 +21,13 @@ from app.schemas.chat import (
     ChatMessageCreate,
     ChatMessageRead,
 )
-from app.services.llm import chat_stream
+from app.services.llm import chat_stream, explain_packets_stream
+from app.api.packets import (
+    serialize_packets_for_llm,
+    _summary_path_for,
+    _offsets_path_for,
+    _load_packet_index,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +94,57 @@ async def _build_context(session, capture: Capture) -> str:
             f"| {app} | {c.packet_count} pkts | {c.byte_count} B | {flags}"
         )
     return "\n".join(lines)
+
+
+class ExplainRequest(BaseModel):
+    indices: list[int]
+
+
+@router.post("/{capture_id}/explain")
+async def explain_packets(
+    capture_id: uuid.UUID,
+    body: ExplainRequest,
+    request: Request,
+    user: User = Depends(get_current_user),
+):
+    """One-shot explanation of selected packets, streamed via SSE."""
+    if not body.indices:
+        raise HTTPException(status_code=422, detail="indices must not be empty")
+    if not settings.llm_api_key:
+        raise HTTPException(status_code=400, detail="LLM is not configured on this server")
+
+    async with async_session() as session:
+        capture = await _get_owned_capture(session, capture_id, user)
+        if capture.status != CaptureStatus.ready:
+            raise HTTPException(status_code=400, detail="Capture not yet parsed")
+        context = await _build_context(session, capture)
+
+    _load_packet_index(capture)
+    summary_path = _summary_path_for(capture)
+    offsets_path = _offsets_path_for(capture)
+    packets_block = serialize_packets_for_llm(summary_path, offsets_path, body.indices)
+
+    async def event_stream():
+        try:
+            async for delta in explain_packets_stream(context, packets_block):
+                if await request.is_disconnected():
+                    break
+                yield f"data: {json.dumps({'delta': delta})}\n\n"
+                await asyncio.sleep(0)
+        except Exception:
+            logger.exception("explain_packets_stream failed for capture %s", capture_id)
+            yield f"data: {json.dumps({'error': 'Explanation failed; see server logs.'})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/{capture_id}/threads", response_model=list[ChatThreadRead])
@@ -210,6 +268,20 @@ async def post_message(
         # Name the thread after the first question.
         if thread.title in ("New chat", "") and not history:
             thread.title = question[:60]
+
+        # Prepend selected packet context if the user attached packets.
+        if body.packet_indices:
+            _load_packet_index(capture)
+            summary_path = _summary_path_for(capture)
+            offsets_path = _offsets_path_for(capture)
+            packets_block = serialize_packets_for_llm(
+                summary_path, offsets_path, body.packet_indices
+            )
+            if packets_block:
+                question = (
+                    f"## Selected packets\n{packets_block}\n\n"
+                    f"## Question\n{question}"
+                )
 
         session.add(ChatMessage(thread_id=thread_id, role="user", content=question))
         await session.commit()

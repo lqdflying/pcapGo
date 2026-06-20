@@ -23,11 +23,19 @@ class CaptureList(BaseModel):
     total: int
 
 
+class FieldNode(BaseModel):
+    name: str
+    value: str
+    offset: int | None = None
+    length: int | None = None
+
+
 class LayerNode(BaseModel):
     name: str
     summary: str
     offset: int  # byte offset within the packet (0-based)
     length: int  # byte length of this layer
+    fields: list[FieldNode] = []
     children: list["LayerNode"] = []
 
 

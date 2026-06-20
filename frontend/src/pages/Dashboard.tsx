@@ -20,10 +20,19 @@ import {
   Clock,
   LogOut,
   ChevronRight,
+  Palette,
 } from "lucide-react";
+import { useThemeStore, type Theme } from "../lib/store";
+
+const THEMES: { value: Theme; label: string }[] = [
+  { value: "dark", label: "Dark" },
+  { value: "light", label: "Light" },
+  { value: "obsidian", label: "Obsidian" },
+];
 
 export function DashboardPage() {
   const { user, setUser } = useAuthStore();
+  const { theme, setTheme } = useThemeStore();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [uploading, setUploading] = useState(false);
@@ -111,6 +120,19 @@ export function DashboardPage() {
               <span>{user.login}</span>
             </div>
           )}
+          <div className="flex items-center gap-1 rounded-lg border border-panel-border px-1">
+            <Palette className="h-3.5 w-3.5 text-panel-muted" />
+            <select
+              aria-label="Theme"
+              value={theme}
+              onChange={(e) => setTheme(e.target.value as Theme)}
+              className="bg-transparent py-1 pr-1 text-xs text-panel-text focus:outline-none"
+            >
+              {THEMES.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+          </div>
           <button
             onClick={handleLogout}
             className="rounded-lg p-2 text-panel-muted transition hover:bg-panel-border hover:text-panel-text"
