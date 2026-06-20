@@ -2,6 +2,82 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Theme tokens ─────────────────────────────────────────────────────
+   Panel colors as space-separated RGB channels so Tailwind's /NN alpha
+   utilities (bg-panel-accent/20, etc.) compose correctly.
+   Scrollbar, resize-handle, and row-tint tokens are literal colors
+   (applied via plain CSS, not Tailwind alpha). */
+
+:root,
+html[data-theme="dark"] {
+  --panel-bg: 30 30 46;
+  --panel-header: 24 24 37;
+  --panel-border: 49 50 68;
+  --panel-text: 205 214 244;
+  --panel-muted: 108 112 134;
+  --panel-accent: 137 180 250;
+  --panel-success: 166 227 161;
+  --panel-warning: 249 226 175;
+  --panel-error: 243 139 168;
+
+  --scrollbar-track: #181825;
+  --scrollbar-thumb: #313244;
+  --scrollbar-thumb-hover: #45475a;
+  --resize-hover: #89b4fa;
+
+  --row-tcp: rgba(162, 210, 255, 0.06);
+  --row-udp: rgba(180, 137, 255, 0.06);
+  --row-icmp: rgba(255, 182, 184, 0.06);
+  --row-other: rgba(202, 211, 245, 0.04);
+  --row-selected: rgba(137, 180, 250, 0.15);
+}
+
+html[data-theme="light"] {
+  --panel-bg: 255 255 255;
+  --panel-header: 243 244 246;
+  --panel-border: 215 218 224;
+  --panel-text: 31 36 48;
+  --panel-muted: 107 114 128;
+  --panel-accent: 37 99 235;
+  --panel-success: 22 163 74;
+  --panel-warning: 180 83 9;
+  --panel-error: 220 38 38;
+
+  --scrollbar-track: #eceef1;
+  --scrollbar-thumb: #cbd0d8;
+  --scrollbar-thumb-hover: #aeb4bf;
+  --resize-hover: #2563eb;
+
+  --row-tcp: rgba(37, 99, 235, 0.07);
+  --row-udp: rgba(124, 58, 237, 0.07);
+  --row-icmp: rgba(220, 38, 38, 0.07);
+  --row-other: rgba(31, 36, 48, 0.04);
+  --row-selected: rgba(37, 99, 235, 0.16);
+}
+
+html[data-theme="obsidian"] {
+  --panel-bg: 38 38 38;
+  --panel-header: 30 30 30;
+  --panel-border: 58 58 58;
+  --panel-text: 212 212 212;
+  --panel-muted: 136 136 136;
+  --panel-accent: 224 133 63;
+  --panel-success: 140 175 110;
+  --panel-warning: 168 168 74;
+  --panel-error: 201 122 168;
+
+  --scrollbar-track: #1e1e1e;
+  --scrollbar-thumb: #3a3a3a;
+  --scrollbar-thumb-hover: #4a4a4a;
+  --resize-hover: #e0853f;
+
+  --row-tcp: rgba(224, 133, 63, 0.07);
+  --row-udp: rgba(201, 122, 168, 0.06);
+  --row-icmp: rgba(217, 107, 107, 0.07);
+  --row-other: rgba(212, 212, 212, 0.04);
+  --row-selected: rgba(224, 133, 63, 0.16);
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -23,29 +99,29 @@ body {
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #181825;
+  background: var(--scrollbar-track);
 }
 ::-webkit-scrollbar-thumb {
-  background: #313244;
+  background: var(--scrollbar-thumb);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #45475a;
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* Wireshark-style packet row colors */
-.tr-tcp { background-color: rgba(162, 210, 255, 0.06); }
-.tr-udp { background-color: rgba(180, 137, 255, 0.06); }
-.tr-icmp { background-color: rgba(255, 182, 184, 0.06); }
-.tr-other { background-color: rgba(202, 211, 245, 0.04); }
+.tr-tcp { background-color: var(--row-tcp); }
+.tr-udp { background-color: var(--row-udp); }
+.tr-icmp { background-color: var(--row-icmp); }
+.tr-other { background-color: var(--row-other); }
 
 /* Selected row */
-.tr-selected { background-color: rgba(137, 180, 250, 0.15) !important; }
+.tr-selected { background-color: var(--row-selected) !important; }
 
 /* Resizable panels handle */
 [data-panel-group] > [data-resize-handle] {
   transition: background-color 0.15s;
 }
 [data-panel-group] > [data-resize-handle]:hover {
-  background-color: #89b4fa;
+  background-color: var(--resize-hover);
 }

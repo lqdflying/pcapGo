@@ -27,6 +27,7 @@ from app.schemas.capture import (
     FollowStreamResponse,
 )
 from app.services.follow import follow_stream_sync
+from app.services.packet_fields import read_packet_at, enrich_layers_with_fields
 
 logger = logging.getLogger(__name__)
 
@@ -377,6 +378,15 @@ async def get_packet_detail(
     if not record:
         raise HTTPException(status_code=404, detail="Packet record not found")
 
+    layers = record.get("layers", [])
+    if capture.stored_path and Path(capture.stored_path).exists():
+        try:
+            pkt = await asyncio.to_thread(read_packet_at, capture.stored_path, packet_idx)
+            if pkt is not None:
+                enrich_layers_with_fields(layers, pkt)
+        except Exception:
+            logger.debug("Field enrichment failed for %s@%d", capture_id, packet_idx, exc_info=True)
+
     return PacketDetail(
         idx=packet_idx,
         ts=record.get("ts", 0),
@@ -385,7 +395,7 @@ async def get_packet_detail(
         proto=record.get("proto", ""),
         length=record.get("length", 0),
         info=record.get("info", ""),
-        layers=record.get("layers", []),
+        layers=layers,
         raw_hex=record.get("raw_hex", ""),
         raw_offset=record.get("raw_offset", 0),
     )
@@ -433,6 +443,32 @@ async def follow_stream(
         raise HTTPException(status_code=500, detail="Failed to reconstruct stream")
 
     return FollowStreamResponse(**result)
+
+
+_MAX_EXPLAIN_PACKETS = 50
+
+
+def serialize_packets_for_llm(
+    summary_path: str, offsets_path: str, indices: list[int]
+) -> str:
+    """Read selected packet summaries from JSONL and format them for LLM context."""
+    indices = indices[:_MAX_EXPLAIN_PACKETS]
+    lines: list[str] = []
+    for i in indices:
+        off = _read_single_offset(offsets_path, i)
+        if off is None:
+            continue
+        s = _read_summary_at(summary_path, off[1])
+        if not s:
+            continue
+        src = s.get("src", "?")
+        dst = s.get("dst", "?")
+        proto = s.get("proto", "?")
+        length = s.get("length", 0)
+        info = s.get("info", "")
+        ts = s.get("ts", 0)
+        lines.append(f"#{i} t={ts:.6f} {proto} {src}->{dst} len={length} {info}")
+    return "\n".join(lines)
 
 
 _EXPORT_COLUMNS = ["idx", "ts", "src", "dst", "proto", "length", "info"]

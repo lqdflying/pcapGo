@@ -5,7 +5,7 @@ import type { LayerNode, PacketDetail } from "../api/client";
 interface Props {
   detail: PacketDetail | null;
   loading: boolean;
-  onSelectLayer?: (layer: LayerNode) => void;
+  onSelectLayer?: (layer: { offset: number; length: number }) => void;
 }
 
 export function PacketTree({ detail, loading, onSelectLayer }: Props) {
@@ -61,14 +61,16 @@ function TreeNode({
   node: LayerNode;
   depth: number;
   defaultExpanded: boolean;
-  onSelectLayer?: (layer: LayerNode) => void;
+  onSelectLayer?: (range: { offset: number; length: number }) => void;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const hasChildren = node.children.length > 0;
+  const hasFields = (node.fields?.length ?? 0) > 0;
+  const expandable = hasChildren || hasFields;
 
   const handleRowClick = () => {
-    onSelectLayer?.(node);
-    if (hasChildren) {
+    onSelectLayer?.({ offset: node.offset, length: node.length });
+    if (expandable) {
       setExpanded((prev) => !prev);
     }
   };
@@ -83,7 +85,7 @@ function TreeNode({
       <div
         role="button"
         tabIndex={0}
-        aria-expanded={hasChildren ? expanded : undefined}
+        aria-expanded={expandable ? expanded : undefined}
         onClick={handleRowClick}
         onKeyDown={(e) => {
           if (e.key !== "Enter" && e.key !== " ") return;
@@ -95,7 +97,7 @@ function TreeNode({
         }`}
         style={{ paddingLeft: 4 + depth * 16 }}
       >
-        {hasChildren ? (
+        {expandable ? (
           expanded ? (
             <ChevronDown
               onClick={handleChevronClick}
@@ -113,17 +115,51 @@ function TreeNode({
         <span className="text-panel-accent">{node.name}</span>
         <span className="ml-2 truncate text-panel-muted">{node.summary}</span>
       </div>
-      {expanded &&
-        hasChildren &&
-        node.children.map((child, i) => (
-          <TreeNode
-            key={`${child.name}-${i}`}
-            node={child}
-            depth={depth + 1}
-            defaultExpanded={depth === 0}
-            onSelectLayer={onSelectLayer}
-          />
-        ))}
+      {expanded && (
+        <>
+          {hasFields &&
+            node.fields.map((field, i) => (
+              <div
+                key={`${field.name}-${i}`}
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  const range =
+                    field.offset != null && field.length != null
+                      ? { offset: field.offset, length: field.length }
+                      : { offset: node.offset, length: node.length };
+                  onSelectLayer?.(range);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" && e.key !== " ") return;
+                  e.preventDefault();
+                  const range =
+                    field.offset != null && field.length != null
+                      ? { offset: field.offset, length: field.length }
+                      : { offset: node.offset, length: node.length };
+                  onSelectLayer?.(range);
+                }}
+                className="flex cursor-pointer items-center rounded px-1 py-0.5 transition hover:bg-panel-accent/5"
+                style={{ paddingLeft: 4 + (depth + 1) * 16 }}
+              >
+                <span className="mr-1 w-3 shrink-0" />
+                <span className="text-panel-success">{field.name}</span>
+                <span className="mx-1 text-panel-muted">:</span>
+                <span className="truncate text-panel-text">{field.value}</span>
+              </div>
+            ))}
+          {hasChildren &&
+            node.children.map((child, i) => (
+              <TreeNode
+                key={`${child.name}-${i}`}
+                node={child}
+                depth={depth + 1}
+                defaultExpanded={depth === 0}
+                onSelectLayer={onSelectLayer}
+              />
+            ))}
+        </>
+      )}
     </div>
   );
 }

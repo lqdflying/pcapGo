@@ -1,8 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { ArrowLeft, Loader2, ChevronLeft, ChevronRight, Search, Download } from "lucide-react";
+import {
+  ArrowLeft,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  Download,
+  Palette,
+  Sparkles,
+  PanelRightOpen,
+  PanelRightClose,
+} from "lucide-react";
 import {
   getPackets,
   getPacketDetail,
@@ -14,12 +25,13 @@ import {
   type ConversationStats,
 } from "../api/client";
 import { api } from "../api/client";
-import { useCaptureStore } from "../lib/store";
+import { useCaptureStore, useThemeStore, useAIDockStore, type Theme } from "../lib/store";
 import { PacketList } from "../components/PacketList";
 import { PacketTree } from "../components/PacketTree";
 import { HexViewer } from "../components/HexViewer";
 import { StatsTabs } from "../components/StatsTabs";
 import { AIAnalysisPanel } from "../components/AIAnalysisPanel";
+import { FloatingWindow } from "../components/FloatingWindow";
 import { FollowStream } from "../components/FollowStream";
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200, 500];
@@ -39,11 +51,27 @@ const PROTOCOL_OPTIONS = [
 export function CapturePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { selectedPacketIdx, setSelectedPacket, filterProto, setFilterProto } =
-    useCaptureStore();
+  const {
+    selectedPacketIdx,
+    selectedIndices,
+    selectPacket,
+    setSelectedPacket,
+    filterProto,
+    setFilterProto,
+  } = useCaptureStore();
+  const { theme, setTheme } = useThemeStore();
+  const {
+    aiDockOpen,
+    aiPoppedOut,
+    aiFloat,
+    setAiDockOpen,
+    toggleAiPopOut,
+    setAiFloat,
+  } = useAIDockStore();
+  const selectedSet = useMemo(() => new Set(selectedIndices), [selectedIndices]);
   const [packetDetail, setPacketDetail] = useState<PacketDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [viewMode, setViewMode] = useState<"packets" | "stats" | "ai">("packets");
+  const [viewMode, setViewMode] = useState<"packets" | "stats">("packets");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(100);
   const [highlight, setHighlight] = useState<{ offset: number; length: number } | null>(null);
@@ -53,7 +81,6 @@ export function CapturePage() {
   const [appliedSearch, setAppliedSearch] = useState("");
   const [followConv, setFollowConv] = useState<ConversationStats | null>(null);
 
-  // Debounce the search box so typing doesn't fire a request per keystroke.
   useEffect(() => {
     const t = setTimeout(() => setAppliedSearch(search), 300);
     return () => clearTimeout(t);
@@ -65,7 +92,6 @@ export function CapturePage() {
       const { data } = await api.get(`/api/captures/${id}`);
       return data;
     },
-    // Poll while parsing (typically <2s); stop once the parse settles.
     refetchInterval: (q) => {
       const d = q.state.data;
       return d && d.status !== "ready" && d.status !== "failed" ? 2000 : false;
@@ -90,7 +116,6 @@ export function CapturePage() {
     enabled: viewMode === "stats" && captureQuery.data?.status === "ready",
   });
 
-  // Reset to first page when filter, search or page size changes.
   useEffect(() => {
     setPage(0);
   }, [filterProto, appliedSearch, pageSize]);
@@ -108,7 +133,7 @@ export function CapturePage() {
 
   const applySearch = (value: string) => {
     setSearch(value);
-    setAppliedSearch(value); // apply immediately (skip the debounce) for clicks
+    setAppliedSearch(value);
   };
 
   const handleSelectEndpoint = (ip: string) => {
@@ -117,8 +142,6 @@ export function CapturePage() {
   };
 
   const handleSelectConversation = (conv: ConversationStats) => {
-    // q is a single substring, so filter by the source host — shows all packets
-    // involving that endpoint of the conversation.
     applySearch(conv.src_ip);
     setViewMode("packets");
   };
@@ -127,6 +150,13 @@ export function CapturePage() {
     setBucketSeconds(bs);
     setIoMetric(metric);
   };
+
+  const aiPanel = id ? (
+    <AIAnalysisPanel
+      captureId={id}
+      selectedIndices={selectedIndices}
+    />
+  ) : null;
 
   return (
     <div className="flex h-full flex-col bg-panel-bg">
@@ -152,7 +182,7 @@ export function CapturePage() {
         <div className="ml-auto flex items-center gap-2">
           {/* View mode toggle */}
           <div className="flex rounded-lg border border-panel-border overflow-hidden">
-            {(["packets", "stats", "ai"] as const).map((mode) => (
+            {(["packets", "stats"] as const).map((mode) => (
               <button
                 key={mode}
                 onClick={() => setViewMode(mode)}
@@ -162,10 +192,40 @@ export function CapturePage() {
                     : "text-panel-muted hover:bg-panel-border"
                 }`}
               >
-                {mode === "packets" ? "Packets" : mode === "stats" ? "Statistics" : "AI Analysis"}
+                {mode === "packets" ? "Packets" : "Statistics"}
               </button>
             ))}
           </div>
+
+          {/* AI dock toggle */}
+          {viewMode === "packets" && (
+            <>
+              <button
+                onClick={() => setAiDockOpen(!aiDockOpen)}
+                title={aiDockOpen ? "Close AI panel" : "Open AI panel"}
+                className={`rounded-lg p-1.5 transition ${
+                  aiDockOpen
+                    ? "bg-panel-accent/20 text-panel-accent"
+                    : "text-panel-muted hover:bg-panel-border hover:text-panel-text"
+                }`}
+              >
+                <Sparkles className="h-4 w-4" />
+              </button>
+              {aiDockOpen && (
+                <button
+                  onClick={toggleAiPopOut}
+                  title={aiPoppedOut ? "Dock AI panel" : "Pop out AI panel"}
+                  className="rounded-lg p-1.5 text-panel-muted transition hover:bg-panel-border hover:text-panel-text"
+                >
+                  {aiPoppedOut ? (
+                    <PanelRightClose className="h-4 w-4" />
+                  ) : (
+                    <PanelRightOpen className="h-4 w-4" />
+                  )}
+                </button>
+              )}
+            </>
+          )}
 
           {/* Packet search, protocol filter, export */}
           {viewMode === "packets" && (
@@ -203,6 +263,19 @@ export function CapturePage() {
               </a>
             </>
           )}
+          <div className="flex items-center gap-1 rounded border border-panel-border px-1">
+            <Palette className="h-3.5 w-3.5 text-panel-muted" />
+            <select
+              aria-label="Theme"
+              value={theme}
+              onChange={(e) => setTheme(e.target.value as Theme)}
+              className="bg-transparent py-1 pr-1 text-xs text-panel-text focus:outline-none"
+            >
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+              <option value="obsidian">Obsidian</option>
+            </select>
+          </div>
         </div>
       </header>
 
@@ -221,77 +294,99 @@ export function CapturePage() {
       ) : (
         <>
           {viewMode === "packets" && (
-            <PanelGroup direction="vertical" className="flex-1">
-              {/* Packet list */}
-              <Panel defaultSize={55} minSize={20}>
-                <div className="flex h-full flex-col">
-                  <PacketList
-                    packets={packets}
-                    selectedIdx={selectedPacketIdx}
-                    onSelect={setSelectedPacket}
-                    loading={packetsQuery.isLoading}
-                  />
-                  {/* Pagination controls */}
-                  <div className="flex items-center justify-between border-t border-panel-border bg-panel-header px-3 py-1.5 text-xs">
-                    <div className="flex items-center gap-2 text-panel-muted">
-                      <span>Page {page + 1} of {totalPages}</span>
-                      <span>·</span>
-                      <span>{totalPackets.toLocaleString()} packets</span>
+            <PanelGroup direction="horizontal" autoSaveId="capture-main" className="flex-1">
+              <Panel minSize={40} order={1} id="packets-main">
+                <PanelGroup direction="vertical" autoSaveId="capture-vertical">
+                  {/* Packet list */}
+                  <Panel defaultSize={55} minSize={20}>
+                    <div className="flex h-full flex-col">
+                      <PacketList
+                        packets={packets}
+                        selectedIdx={selectedPacketIdx}
+                        selectedSet={selectedSet}
+                        onSelect={selectPacket}
+                        loading={packetsQuery.isLoading}
+                      />
+                      {/* Pagination controls */}
+                      <div className="flex items-center justify-between border-t border-panel-border bg-panel-header px-3 py-1.5 text-xs">
+                        <div className="flex items-center gap-2 text-panel-muted">
+                          <span>Page {page + 1} of {totalPages}</span>
+                          <span>·</span>
+                          <span>{totalPackets.toLocaleString()} packets</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <select
+                            aria-label="Packets per page"
+                            value={pageSize}
+                            onChange={(e) => setPageSize(Number(e.target.value))}
+                            className="rounded border border-panel-border bg-panel-bg px-2 py-1 text-xs text-panel-text focus:border-panel-accent focus:outline-none"
+                          >
+                            {PAGE_SIZE_OPTIONS.map((size) => (
+                              <option key={size} value={size}>
+                                {size} / page
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            aria-label="Previous page"
+                            disabled={page === 0 || packetsQuery.isLoading}
+                            onClick={() => setPage((p) => Math.max(0, p - 1))}
+                            className="rounded border border-panel-border p-1 text-panel-text disabled:opacity-40 hover:bg-panel-border"
+                          >
+                            <ChevronLeft className="h-3 w-3" />
+                          </button>
+                          <button
+                            aria-label="Next page"
+                            disabled={page >= totalPages - 1 || packetsQuery.isLoading}
+                            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                            className="rounded border border-panel-border p-1 text-panel-text disabled:opacity-40 hover:bg-panel-border"
+                          >
+                            <ChevronRight className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <select
-                        aria-label="Packets per page"
-                        value={pageSize}
-                        onChange={(e) => setPageSize(Number(e.target.value))}
-                        className="rounded border border-panel-border bg-panel-bg px-2 py-1 text-xs text-panel-text focus:border-panel-accent focus:outline-none"
-                      >
-                        {PAGE_SIZE_OPTIONS.map((size) => (
-                          <option key={size} value={size}>
-                            {size} / page
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        aria-label="Previous page"
-                        disabled={page === 0 || packetsQuery.isLoading}
-                        onClick={() => setPage((p) => Math.max(0, p - 1))}
-                        className="rounded border border-panel-border p-1 text-panel-text disabled:opacity-40 hover:bg-panel-border"
-                      >
-                        <ChevronLeft className="h-3 w-3" />
-                      </button>
-                      <button
-                        aria-label="Next page"
-                        disabled={page >= totalPages - 1 || packetsQuery.isLoading}
-                        onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                        className="rounded border border-panel-border p-1 text-panel-text disabled:opacity-40 hover:bg-panel-border"
-                      >
-                        <ChevronRight className="h-3 w-3" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </Panel>
-              <PanelResizeHandle className="h-1 bg-panel-border transition hover:bg-panel-accent" />
-              {/* Detail panes */}
-              <Panel defaultSize={45} minSize={15}>
-                <PanelGroup direction="horizontal">
-                  <Panel defaultSize={50} minSize={20}>
-                    <PacketTree
-                      detail={packetDetail}
-                      loading={detailLoading}
-                      onSelectLayer={setHighlight}
-                    />
                   </Panel>
-                  <PanelResizeHandle className="w-1 bg-panel-border transition hover:bg-panel-accent" />
-                  <Panel defaultSize={50} minSize={20}>
-                    <HexViewer
-                      detail={packetDetail}
-                      loading={detailLoading}
-                      highlight={highlight}
-                    />
+                  <PanelResizeHandle className="h-1 bg-panel-border transition hover:bg-panel-accent" />
+                  {/* Detail panes */}
+                  <Panel defaultSize={45} minSize={15}>
+                    <PanelGroup direction="horizontal">
+                      <Panel defaultSize={50} minSize={20}>
+                        <PacketTree
+                          detail={packetDetail}
+                          loading={detailLoading}
+                          onSelectLayer={setHighlight}
+                        />
+                      </Panel>
+                      <PanelResizeHandle className="w-1 bg-panel-border transition hover:bg-panel-accent" />
+                      <Panel defaultSize={50} minSize={20}>
+                        <HexViewer
+                          detail={packetDetail}
+                          loading={detailLoading}
+                          highlight={highlight}
+                        />
+                      </Panel>
+                    </PanelGroup>
                   </Panel>
                 </PanelGroup>
               </Panel>
+
+              {/* AI dock (right panel) */}
+              {aiDockOpen && !aiPoppedOut && (
+                <>
+                  <PanelResizeHandle className="w-1 bg-panel-border transition hover:bg-panel-accent" />
+                  <Panel defaultSize={30} minSize={20} order={2} id="ai-dock">
+                    <div className="flex h-full flex-col border-l border-panel-border">
+                      <div className="flex items-center justify-between border-b border-panel-border bg-panel-header px-3 py-1.5">
+                        <span className="text-xs font-medium text-panel-muted">AI Analysis</span>
+                      </div>
+                      <div className="flex-1 overflow-hidden">
+                        {aiPanel}
+                      </div>
+                    </div>
+                  </Panel>
+                </>
+              )}
             </PanelGroup>
           )}
 
@@ -307,13 +402,19 @@ export function CapturePage() {
               />
             </div>
           )}
-
-          {viewMode === "ai" && (
-            <div className="flex-1 overflow-auto">
-              <AIAnalysisPanel captureId={id!} />
-            </div>
-          )}
         </>
+      )}
+
+      {/* AI floating window */}
+      {aiDockOpen && aiPoppedOut && viewMode === "packets" && (
+        <FloatingWindow
+          geom={aiFloat}
+          onChange={setAiFloat}
+          onDock={() => toggleAiPopOut()}
+          onClose={() => setAiDockOpen(false)}
+        >
+          {aiPanel}
+        </FloatingWindow>
       )}
 
       {followConv && (

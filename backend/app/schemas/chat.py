@@ -12,6 +12,7 @@ class ChatThreadCreate(BaseModel):
 
 class ChatMessageCreate(BaseModel):
     content: str
+    packet_indices: list[int] | None = None
 
 
 class ChatMessageRead(BaseModel):

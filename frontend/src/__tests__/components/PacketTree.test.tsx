@@ -56,7 +56,7 @@ describe("PacketTree", () => {
     render(<PacketTree detail={detail} loading={false} onSelectLayer={onSelectLayer} />);
     fireEvent.click(screen.getByText("Ethernet"));
     expect(onSelectLayer).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "Ethernet", offset: 0, length: 14 })
+      expect.objectContaining({ offset: 0, length: 14 })
     );
   });
 });
