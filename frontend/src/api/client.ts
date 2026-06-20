@@ -184,12 +184,28 @@ export async function getPackets(
   captureId: string,
   offset: number = 0,
   limit: number = 200,
-  proto: string = ""
+  proto: string = "",
+  q: string = ""
 ): Promise<PacketListEnvelope> {
   const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
   if (proto) params.set("proto", proto);
+  if (q) params.set("q", q);
   const { data } = await api.get(`/api/captures/${captureId}/packets?${params}`);
   return data;
+}
+
+// Build the export URL so the browser can download it directly (the cookie
+// auth rides along on the GET). Honors the active proto/q filters.
+export function packetsExportUrl(
+  captureId: string,
+  format: "csv" | "json",
+  proto: string = "",
+  q: string = ""
+): string {
+  const params = new URLSearchParams({ format });
+  if (proto) params.set("proto", proto);
+  if (q) params.set("q", q);
+  return `/api/captures/${captureId}/export?${params}`;
 }
 
 export async function getPacketDetail(

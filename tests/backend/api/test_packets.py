@@ -239,6 +239,134 @@ class TestListPackets:
 
 
 @pytest.mark.integration
+class TestSearchPackets:
+    """Tests for the ?q= substring search on GET /packets."""
+
+    SUMMARIES = [
+        {"ts": 1.0, "src": "10.0.0.1", "dst": "10.0.0.2",
+         "proto": "TCP", "app_proto": "HTTP", "length": 100, "info": "GET /index"},
+        {"ts": 2.0, "src": "10.0.0.2", "dst": "10.0.0.1",
+         "proto": "TCP", "app_proto": "HTTP", "length": 80, "info": "200 OK"},
+        {"ts": 3.0, "src": "10.0.0.9", "dst": "8.8.8.8",
+         "proto": "UDP", "app_proto": "DNS", "length": 60, "info": "DNS query example.com"},
+    ]
+
+    async def test_q_matches_address(self, test_client_authenticated, test_capture):
+        _write_fake_sidecars(test_capture.parsed_index_path, self.SUMMARIES)
+        try:
+            r = await test_client_authenticated.get(
+                f"/api/captures/{test_capture.id}/packets?q=8.8.8.8"
+            )
+            assert r.status_code == 200
+            body = r.json()
+            assert body["total"] == 1
+            assert body["items"][0]["idx"] == 2
+        finally:
+            _cleanup_sidecars(test_capture.parsed_index_path)
+
+    async def test_q_matches_info_case_insensitive(
+        self, test_client_authenticated, test_capture
+    ):
+        _write_fake_sidecars(test_capture.parsed_index_path, self.SUMMARIES)
+        try:
+            r = await test_client_authenticated.get(
+                f"/api/captures/{test_capture.id}/packets?q=dns"
+            )
+            assert r.status_code == 200
+            assert r.json()["total"] == 1
+        finally:
+            _cleanup_sidecars(test_capture.parsed_index_path)
+
+    async def test_q_combined_with_proto(self, test_client_authenticated, test_capture):
+        _write_fake_sidecars(test_capture.parsed_index_path, self.SUMMARIES)
+        try:
+            # 10.0.0.1 appears in two TCP packets and zero UDP packets.
+            r = await test_client_authenticated.get(
+                f"/api/captures/{test_capture.id}/packets?proto=tcp&q=10.0.0.1"
+            )
+            assert r.status_code == 200
+            assert r.json()["total"] == 2
+        finally:
+            _cleanup_sidecars(test_capture.parsed_index_path)
+
+    async def test_empty_q_returns_all(self, test_client_authenticated, test_capture):
+        _write_fake_sidecars(test_capture.parsed_index_path, self.SUMMARIES)
+        try:
+            r = await test_client_authenticated.get(
+                f"/api/captures/{test_capture.id}/packets?q="
+            )
+            assert r.status_code == 200
+            assert r.json()["total"] == 3
+        finally:
+            _cleanup_sidecars(test_capture.parsed_index_path)
+
+
+@pytest.mark.integration
+class TestExportPackets:
+    """Tests for GET /api/captures/{id}/export."""
+
+    SUMMARIES = [
+        {"ts": 1.0, "src": "10.0.0.1", "dst": "10.0.0.2",
+         "proto": "TCP", "app_proto": "HTTP", "length": 100, "info": "GET /index"},
+        {"ts": 2.0, "src": "10.0.0.9", "dst": "8.8.8.8",
+         "proto": "UDP", "app_proto": "DNS", "length": 60, "info": "DNS query"},
+    ]
+
+    async def test_csv_export(self, test_client_authenticated, test_capture):
+        _write_fake_sidecars(test_capture.parsed_index_path, self.SUMMARIES)
+        try:
+            r = await test_client_authenticated.get(
+                f"/api/captures/{test_capture.id}/export?format=csv"
+            )
+            assert r.status_code == 200
+            assert r.headers["content-type"].startswith("text/csv")
+            assert "attachment" in r.headers.get("content-disposition", "")
+            lines = [ln for ln in r.text.splitlines() if ln.strip()]
+            assert lines[0] == "idx,ts,src,dst,proto,length,info"
+            assert len(lines) == 1 + 2  # header + two packets
+        finally:
+            _cleanup_sidecars(test_capture.parsed_index_path)
+
+    async def test_json_export(self, test_client_authenticated, test_capture):
+        _write_fake_sidecars(test_capture.parsed_index_path, self.SUMMARIES)
+        try:
+            r = await test_client_authenticated.get(
+                f"/api/captures/{test_capture.id}/export?format=json"
+            )
+            assert r.status_code == 200
+            data = r.json()
+            assert isinstance(data, list)
+            assert len(data) == 2
+            assert data[0]["src"] == "10.0.0.1"
+            assert set(data[0].keys()) == {
+                "idx", "ts", "src", "dst", "proto", "length", "info"
+            }
+        finally:
+            _cleanup_sidecars(test_capture.parsed_index_path)
+
+    async def test_export_honors_filters(self, test_client_authenticated, test_capture):
+        _write_fake_sidecars(test_capture.parsed_index_path, self.SUMMARIES)
+        try:
+            r = await test_client_authenticated.get(
+                f"/api/captures/{test_capture.id}/export?format=json&proto=udp"
+            )
+            assert r.status_code == 200
+            data = r.json()
+            assert len(data) == 1
+            assert data[0]["proto"] == "UDP"
+        finally:
+            _cleanup_sidecars(test_capture.parsed_index_path)
+
+    async def test_invalid_format_returns_422(
+        self, test_client_authenticated, test_capture
+    ):
+        r = await test_client_authenticated.get(
+            f"/api/captures/{test_capture.id}/export?format=xml"
+        )
+        assert r.status_code == 422
+
+
+@pytest.mark.integration
 class TestPacketDetail:
     """Tests for GET /api/captures/{id}/packets/{idx}."""
 
