@@ -21,12 +21,19 @@ Harbor enforces Cosign content trust — every published image MUST be signed be
 - To regenerate keys: `cosign generate-key-pair` (prompts for / accepts `COSIGN_PASSWORD` env var). Rotate via the same command if the key is compromised.
 
 ## Versioning & Tags
-- **Git-tag-driven**. A release tag has the form `v<semver>` (e.g. `v0.0.1`).
-- Each release produces **two Harbor tags** for one image (same manifest/digest):
-  - `img.aksg.net/pcapgo/pcapgo:<version>` (e.g. `0.0.1`) — **immutable**, one per release. Never re-push a version tag.
-  - `img.aksg.net/pcapgo/pcapgo:latest` — **mutable**, always points at the newest release. Re-pushed on every release.
-- **The triad must correspond**: the git tag `v0.0.1`, the Harbor `0.0.1` tag, and the source code state (the commit) must all refer to the same code. Build the image from the exact commit you tag.
+- **Git-tag-driven**. A release tag has the form `v<semver>` (e.g. `v0.2.0`).
+- Each release produces **four Harbor tags** for one image (same manifest/digest):
+  - `img.aksg.net/pcapgo/pcapgo:<version>` (e.g. `0.2.0`) — **bug-fix / full-semver tag**, immutable, one per release. Never re-push a version tag.
+  - `img.aksg.net/pcapgo/pcapgo:<minor>` (e.g. `0.2`) — **minor rolling tag**, mutable, always points at the newest `0.2.x` release. Re-pushed on every `0.2.x` release.
+  - `img.aksg.net/pcapgo/pcapgo:<major>` (e.g. `0`) — **major rolling tag**, mutable, always points at the newest `0.x.x` release. Re-pushed on every release within the `0` major series.
+  - `img.aksg.net/pcapgo/pcapgo:latest` — **mutable**, always points at the newest release regardless of major/minor. Re-pushed on every release.
+- **Rolling tag re-pointing semantics**:
+  - Patch release (`0.2.0` → `0.2.1`): re-points `0.2`, `0`, and `latest`; `0.2.1` is a new immutable tag.
+  - Minor release (`0.2.x` → `0.3.0`): re-points `0` and `latest`, introduces a new `0.3` rolling tag, leaves `0.2` pointing at the last `0.2.x`.
+  - Major release (`0.x.x` → `1.0.0`): introduces new `1` and `1.0` rolling tags, re-points `latest`, leaves `0` / `0.x` frozen at the last release in the `0` series.
+- **The triad must correspond**: the git tag `v0.2.0`, the Harbor `0.2.0` tag, and the source code state (the commit) must all refer to the same code. Build the image from the exact commit you tag. The rolling tags (`0.2`, `0`, `latest`) are *not* part of the triad — they're convenience pointers that follow the immutable tag.
 - **GitHub tag prerequisite**: the local branch MUST have commits before you can tag (`git tag` fails on a branch with no commits). Commit + push the working tree first, then tag.
+- **History note**: the four-tag policy starts at `v0.2.0`. The prior release `v0.0.1` was published under the two-tag policy (`0.0.1` + `latest` only) and therefore has no `0` or `0.0` rolling tag in Harbor.
 
 ## Base Images — Always Pull Latest
 The root `Dockerfile` (and `tests/Dockerfile.nginx`) use Wolfi base images from the internal 0-CVE registry:
@@ -44,12 +51,14 @@ The root `Dockerfile` (and `tests/Dockerfile.nginx`) use Wolfi base images from 
 With `docker compose build`, pass `--pull` as well (`docker compose build --pull`).
 
 ## Release Procedure (manual, run from the repo root)
-No release script is committed to the repo by decision; run these commands directly. Substitute `VERSION` (e.g. `0.0.1`).
+No release script is committed to the repo by decision; run these commands directly. Substitute `VERSION` (e.g. `0.2.0`). The procedure derives the minor and major rolling tags from `$VERSION` with shell parameter expansion: `${VERSION%.*}` strips the last `.<patch>` (`0.2.0` → `0.2`), `${VERSION%%.*}` strips the longest `.*` (`0.2.0` → `0`).
 
 ```bash
 cd /home/opc/pcapGo
 export PATH="$HOME/.local/bin:$PATH"   # cosign
-VERSION=0.0.1
+VERSION=0.2.0
+MINOR=${VERSION%.*}                    # 0.2
+MAJOR=${VERSION%%.*}                   # 0
 IMAGE=img.aksg.net/pcapgo/pcapgo
 
 # 1. Ensure the working tree matches what you want to release.
@@ -60,21 +69,26 @@ IMAGE=img.aksg.net/pcapgo/pcapgo
 docker pull img.aksg.net/nodejs/nodejs:latest
 docker pull img.aksg.net/python/wolfi-python312:latest
 
-# 3. Build with --pull, tagged with version + latest.
+# 3. Build with --pull, tagged with all four tags (same manifest/digest).
 docker build --pull \
   -t $IMAGE:$VERSION \
+  -t $IMAGE:$MINOR \
+  -t $IMAGE:$MAJOR \
   -t $IMAGE:latest \
   .
 
-# 4. Push both tags to Harbor (uses ~/.docker/config.json auth).
+# 4. Push all four tags to Harbor (uses ~/.docker/config.json auth).
 docker push $IMAGE:$VERSION
+docker push $IMAGE:$MINOR
+docker push $IMAGE:$MAJOR
 docker push $IMAGE:latest
 # Capture the digest from the pushed manifest (authoritative, post-push).
 DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $IMAGE:$VERSION | sed 's/.*@//')
 
 # 5. Sign with cosign (key-based). Sign by DIGEST (integrity-preserving,
 #    avoids cosign's tag-deprecation warning). One digest signature covers
-#    both :$VERSION and :latest since they point at the same manifest.
+#    all four tags (:$VERSION, :$MINOR, :$MAJOR, :latest) since they point
+#    at the same manifest.
 export COSIGN_PASSWORD="$(cat ~/.config/pcapgo/cosign.password)"
 cosign sign --key ~/.config/pcapgo/cosign.key --yes $IMAGE@$DIGEST
 
@@ -101,11 +115,12 @@ git push origin v$VERSION
 - Rebuilding an image WITHOUT changing dependencies does NOT change scan results — only fix the deps (version bumps) OR apply the allowlist. Don't churn identical rebuilds expecting different scan output.
 
 ## Operational Notes
-- **Re-pushing `latest` over an already-signed tag**: Harbor may return `412 Precondition Failed` when overwriting a signed manifest with an unsigned push (Harbor protects signed artifacts). If this happens, delete the old `latest` tag in Harbor first, or push by digest and re-point the tag. Version tags (`0.0.1`, `0.0.2`, ...) are immutable and never hit this.
-- **Harbor content trust is a pull-side policy**: it blocks *pulls* of unsigned images, not pushes. The required sequence is still push → `cosign sign` (uploads the signature). A freshly pushed image is unsigned until `cosign sign` completes — pulls will fail in that window.
-- **Sign by digest (default)**: the procedure signs `$IMAGE@$DIGEST` rather than `$IMAGE:$TAG`. This is the integrity-preserving form cosign recommends — tag-based signing is deprecated and will be removed. Since `:$VERSION` and `:latest` point at the same manifest, one digest signature covers both tags. (Tag-based signing also works today and Harbor recognizes it, but prefer digest.)
+- **Re-pushing a mutable rolling tag over an already-signed manifest**: Harbor may return `412 Precondition Failed` when overwriting a signed manifest with an unsigned push (Harbor protects signed artifacts). This applies to *all* mutable rolling tags — `latest`, `0`, and `0.2` — not just `latest`. If it happens, delete the old tag in Harbor first, or push by digest and re-point the tag. The full-semver tag (`0.2.0`, `0.2.1`, ...) is immutable and never hits this.
+- **Harbor content trust is a pull-side policy**: it blocks *pulls* of unsigned images, not pushes. The required sequence is still push → `cosign sign` (uploads the signature). A freshly pushed image is unsigned until `cosign sign` completes — pulls will fail in that window. Because all four tags share one manifest, there is a single signing step; all four tags become pullable once that one signature lands.
+- **Sign by digest (default)**: the procedure signs `$IMAGE@$DIGEST` rather than `$IMAGE:$TAG`. This is the integrity-preserving form cosign recommends — tag-based signing is deprecated and will be removed. Since `:$VERSION`, `:$MINOR`, `:$MAJOR`, and `:latest` all point at the same manifest, one digest signature covers all four tags. (Tag-based signing also works today and Harbor recognizes it, but prefer digest.)
 - **Harbor v2.15 + cosign 3.x interop**: cosign 3.x stores signatures as OCI 1.1 referrers by default. Harbor v2.15.0 recognizes these — the signature appears under the artifact in the Harbor UI and `cosign verify` confirms validity. The Harbor REST `signatures`/`accessories` fields may report `null` in some API responses even when the signature is present and recognized; the authoritative checks are the **Harbor UI signature badge** and **`cosign verify`**. Do NOT re-sign to "fix" a null `signatures` API field unless both the UI and `cosign verify` agree the signature is missing — re-signing just adds duplicate signatures.
 - **Secrets**: Harbor credentials in `~/.docker/config.json`; cosign private key + password in `~/.config/pcapgo/`. Neither is ever committed to the repo. `.gitignore` covers `.env`; keep cosign material outside the repo as it already is. Never print the `.auth` field of `~/.docker/config.json` (it contains base64-encoded credentials).
 
 ## Release Record
-- **v0.0.1** (first release): image `img.aksg.net/pcapgo/pcapgo:0.0.1` + `:latest`, digest `sha256:10e6e93f780511c81616ccfd6e868c2aaf6d91875e3b28477c17d6cdd5ba5b9e`, built with `--pull`, cosign-signed (key-based), verified. Trivy scan: 8 vulns (4 High / 3 Medium / 1 Low, 7 fixable) in `starlette` 0.46.2 and `ecdsa` 0.19.2 — **all 8 allowlisted** in Harbor (CVE-2024-23342, CVE-2025-62727, CVE-2026-48818, CVE-2026-54283, CVE-2025-54121, CVE-2026-48710, CVE-2026-48817, CVE-2026-54282). GitHub tag `v0.0.1` pending commit prerequisite. Known deferred fixes: starlette → ≥1.3.1 (requires fastapi upgrade past 0.115); ecdsa → no fix available (would require migrating `python-jose` → `pyjwt`).
+- **v0.0.1** (first release): image `img.aksg.net/pcapgo/pcapgo:0.0.1` + `:latest`, digest `sha256:10e6e93f780511c81616ccfd6e868c2aaf6d91875e3b28477c17d6cdd5ba5b9e`, built with `--pull`, cosign-signed (key-based), verified. Trivy scan: 8 vulns (4 High / 3 Medium / 1 Low, 7 fixable) in `starlette` 0.46.2 and `ecdsa` 0.19.2 — **all 8 allowlisted** in Harbor (CVE-2024-23342, CVE-2025-62727, CVE-2026-48818, CVE-2026-54283, CVE-2025-54121, CVE-2026-48710, CVE-2026-48817, CVE-2026-54282). GitHub tag `v0.0.1` pending commit prerequisite. Known deferred fixes: starlette → ≥1.3.1 (requires fastapi upgrade past 0.115); ecdsa → no fix available (would require migrating `python-jose` → `pyjwt`). Published under the **two-tag policy** (`0.0.1` + `latest` only — no `0` or `0.0` rolling tag exists for this release).
+- **v0.2.0** (next release, **pending build/push/sign**): ships the PR #1 features — AI chat (persisted threads, stop generation, scope-guarded Q&A), Follow TCP/UDP stream, packet search (`?q=`), CSV/JSON export, and enriched statistics. First release under the **four-tag policy**: will produce `img.aksg.net/pcapgo/pcapgo:0.2.0` (immutable) + `:0.2` (minor rolling, new) + `:0` (major rolling, new) + `:latest` (re-pointed from `0.0.1`). GitHub tag `v0.2.0` to point at the post-PR-#1 commit on `main`. Digest, Trivy scan results, and signature status to be filled in after the release procedure is run.
