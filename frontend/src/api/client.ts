@@ -125,6 +125,23 @@ export interface StatisticsResponse {
   metric: "packets" | "bytes";
 }
 
+export interface FollowStreamSegment {
+  direction: "client" | "server";
+  ts: number;
+  data_b64: string;
+  length: number;
+}
+
+export interface FollowStreamResponse {
+  proto: string;
+  client: string;
+  server: string;
+  segments: FollowStreamSegment[];
+  client_bytes: number;
+  server_bytes: number;
+  truncated: boolean;
+}
+
 export interface AnalysisIssue {
   type: string;
   severity: "low" | "medium" | "high" | "critical";
@@ -213,6 +230,27 @@ export async function getPacketDetail(
   packetIdx: number
 ): Promise<PacketDetail> {
   const { data } = await api.get(`/api/captures/${captureId}/packets/${packetIdx}`);
+  return data;
+}
+
+export async function getFollowStream(
+  captureId: string,
+  params: {
+    src_ip: string;
+    src_port: number;
+    dst_ip: string;
+    dst_port: number;
+    proto: string;
+  }
+): Promise<FollowStreamResponse> {
+  const query = new URLSearchParams({
+    src_ip: params.src_ip,
+    src_port: String(params.src_port),
+    dst_ip: params.dst_ip,
+    dst_port: String(params.dst_port),
+    proto: params.proto,
+  });
+  const { data } = await api.get(`/api/captures/${captureId}/follow?${query}`);
   return data;
 }
 

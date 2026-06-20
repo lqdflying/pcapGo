@@ -13,6 +13,7 @@ interface Props {
   loading: boolean;
   onSelectEndpoint?: (ip: string) => void;
   onSelectConversation?: (conv: ConversationStats) => void;
+  onFollowConversation?: (conv: ConversationStats) => void;
   onBucketChange?: (bucketSeconds: number, metric: "packets" | "bytes") => void;
 }
 
@@ -23,6 +24,7 @@ export function StatsTabs({
   loading,
   onSelectEndpoint,
   onSelectConversation,
+  onFollowConversation,
   onBucketChange,
 }: Props) {
   const [tab, setTab] = useState<Tab>("protocols");
@@ -75,6 +77,7 @@ export function StatsTabs({
           <ConversationsTable
             conversations={stats.conversations}
             onSelect={onSelectConversation}
+            onFollow={onFollowConversation}
           />
         ) : (
           <IOGraph
@@ -339,9 +342,11 @@ type ConvSortKey = "packet_count" | "byte_count" | "duration" | "avg";
 function ConversationsTable({
   conversations,
   onSelect,
+  onFollow,
 }: {
   conversations: ConversationStats[];
   onSelect?: (conv: ConversationStats) => void;
+  onFollow?: (conv: ConversationStats) => void;
 }) {
   const [filter, setFilter] = useState("");
   const [sortKey, setSortKey] = useState<ConvSortKey>("packet_count");
@@ -405,6 +410,7 @@ function ConversationsTable({
         <SortHeader label="Bytes" field="byte_count" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-14 justify-end" />
         <SortHeader label="Avg" field="avg" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-14 justify-end" />
         <SortHeader label="Dur" field="duration" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-16 justify-end" />
+        {onFollow && <span className="w-16 text-right">Stream</span>}
       </div>
       {rows.map((conv, i) => (
         <div
@@ -444,6 +450,19 @@ function ConversationsTable({
           <span className="w-16 text-right text-panel-muted">
             {formatDur(duration(conv))}
           </span>
+          {onFollow && (
+            <span className="w-16 text-right">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onFollow(conv);
+                }}
+                className="rounded px-1.5 py-0.5 text-[11px] text-panel-accent hover:bg-panel-accent/10"
+              >
+                Follow
+              </button>
+            </span>
+          )}
         </div>
       ))}
     </div>

@@ -20,6 +20,7 @@ import { PacketTree } from "../components/PacketTree";
 import { HexViewer } from "../components/HexViewer";
 import { StatsTabs } from "../components/StatsTabs";
 import { AIAnalysisPanel } from "../components/AIAnalysisPanel";
+import { FollowStream } from "../components/FollowStream";
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200, 500];
 const PROTOCOL_OPTIONS = [
@@ -50,6 +51,7 @@ export function CapturePage() {
   const [ioMetric, setIoMetric] = useState<"packets" | "bytes">("packets");
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
+  const [followConv, setFollowConv] = useState<ConversationStats | null>(null);
 
   // Debounce the search box so typing doesn't fire a request per keystroke.
   useEffect(() => {
@@ -300,6 +302,7 @@ export function CapturePage() {
                 loading={statsQuery.isLoading}
                 onSelectEndpoint={handleSelectEndpoint}
                 onSelectConversation={handleSelectConversation}
+                onFollowConversation={setFollowConv}
                 onBucketChange={handleBucketChange}
               />
             </div>
@@ -311,6 +314,14 @@ export function CapturePage() {
             </div>
           )}
         </>
+      )}
+
+      {followConv && (
+        <FollowStream
+          captureId={id!}
+          conversation={followConv}
+          onClose={() => setFollowConv(null)}
+        />
       )}
     </div>
   );

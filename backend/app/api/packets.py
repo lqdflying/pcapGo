@@ -20,7 +20,13 @@ from sqlalchemy import select
 from app.db.session import async_session
 from app.models import User, Capture, CaptureStatus
 from app.core.security import get_current_user
-from app.schemas.capture import PacketSummary, PacketDetail, PacketListResponse
+from app.schemas.capture import (
+    PacketSummary,
+    PacketDetail,
+    PacketListResponse,
+    FollowStreamResponse,
+)
+from app.services.follow import follow_stream_sync
 
 logger = logging.getLogger(__name__)
 
@@ -383,6 +389,50 @@ async def get_packet_detail(
         raw_hex=record.get("raw_hex", ""),
         raw_offset=record.get("raw_offset", 0),
     )
+
+
+@router.get("/{capture_id}/follow", response_model=FollowStreamResponse)
+async def follow_stream(
+    capture_id: uuid.UUID,
+    src_ip: str = Query(...),
+    src_port: int = Query(..., ge=0, le=65535),
+    dst_ip: str = Query(...),
+    dst_port: int = Query(..., ge=0, le=65535),
+    proto: str = Query(..., description="tcp or udp"),
+    user: User = Depends(get_current_user),
+):
+    """Reconstruct a single TCP/UDP conversation's payload (Follow Stream).
+
+    Re-reads the original capture on disk (in a worker thread) and returns the
+    transport payloads of the requested 5-tuple, split into client/server
+    directions in capture order. Payload is capped per direction to bound the
+    response size.
+    """
+    proto_l = proto.strip().lower()
+    if proto_l not in ("tcp", "udp"):
+        raise HTTPException(status_code=422, detail="proto must be 'tcp' or 'udp'")
+
+    capture = await _get_capture(capture_id, user)
+    if not capture.stored_path or not Path(capture.stored_path).exists():
+        raise HTTPException(status_code=404, detail="Capture file is no longer available")
+
+    try:
+        result = await asyncio.to_thread(
+            follow_stream_sync,
+            capture.stored_path,
+            proto_l,
+            src_ip,
+            src_port,
+            dst_ip,
+            dst_port,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception:
+        logger.exception("follow_stream failed for capture %s", capture_id)
+        raise HTTPException(status_code=500, detail="Failed to reconstruct stream")
+
+    return FollowStreamResponse(**result)
 
 
 _EXPORT_COLUMNS = ["idx", "ts", "src", "dst", "proto", "length", "info"]
