@@ -45,6 +45,9 @@ class Capture(Base):
     conversations = relationship(
         "Conversation", back_populates="capture", cascade="all, delete-orphan"
     )
+    chat_threads = relationship(
+        "ChatThread", back_populates="capture", cascade="all, delete-orphan"
+    )
 
 
 class Conversation(Base):
@@ -101,3 +104,48 @@ class Analysis(Base):
     )
 
     conversation = relationship("Conversation", back_populates="analyses")
+
+
+class ChatThread(Base):
+    """A persisted AI chat conversation scoped to a single capture."""
+
+    __tablename__ = "chat_threads"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    capture_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("captures.id", ondelete="CASCADE"), index=True
+    )
+    title: Mapped[str] = mapped_column(String(255), default="New chat")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    capture = relationship("Capture", back_populates="chat_threads")
+    messages = relationship(
+        "ChatMessage",
+        back_populates="thread",
+        cascade="all, delete-orphan",
+        order_by="ChatMessage.created_at",
+    )
+
+
+class ChatMessage(Base):
+    """A single user/assistant turn within a ChatThread."""
+
+    __tablename__ = "chat_messages"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    thread_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("chat_threads.id", ondelete="CASCADE"), index=True
+    )
+    role: Mapped[str] = mapped_column(String(16))  # "user" | "assistant"
+    content: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    thread = relationship("ChatThread", back_populates="messages")

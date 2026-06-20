@@ -157,6 +157,27 @@ export interface AnalysisEvent {
   issues: AnalysisIssue[];
 }
 
+export interface ChatThread {
+  id: string;
+  title: string;
+  created_at: string;
+  message_count: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+}
+
+export interface ChatThreadDetail {
+  id: string;
+  title: string;
+  created_at: string;
+  messages: ChatMessage[];
+}
+
 export interface PacketListEnvelope {
   items: PacketSummary[];
   total: number;
@@ -231,6 +252,89 @@ export async function getPacketDetail(
 ): Promise<PacketDetail> {
   const { data } = await api.get(`/api/captures/${captureId}/packets/${packetIdx}`);
   return data;
+}
+
+// ── AI chat (conversation management) ───────────────────────────────────────
+
+export async function listChatThreads(captureId: string): Promise<ChatThread[]> {
+  const { data } = await api.get(`/api/captures/${captureId}/threads`);
+  return data;
+}
+
+export async function createChatThread(
+  captureId: string,
+  title?: string
+): Promise<ChatThread> {
+  const { data } = await api.post(`/api/captures/${captureId}/threads`, {
+    title: title ?? null,
+  });
+  return data;
+}
+
+export async function getChatThread(
+  captureId: string,
+  threadId: string
+): Promise<ChatThreadDetail> {
+  const { data } = await api.get(`/api/captures/${captureId}/threads/${threadId}`);
+  return data;
+}
+
+export async function deleteChatThread(
+  captureId: string,
+  threadId: string
+): Promise<void> {
+  await api.delete(`/api/captures/${captureId}/threads/${threadId}`);
+}
+
+// Stream an assistant reply over SSE using fetch (EventSource can't POST). The
+// caller passes an AbortSignal so a Stop button can cancel mid-generation; the
+// server detects the disconnect and persists the partial answer.
+export async function streamChatMessage(
+  captureId: string,
+  threadId: string,
+  content: string,
+  opts: {
+    signal?: AbortSignal;
+    onDelta: (text: string) => void;
+    onError?: (message: string) => void;
+  }
+): Promise<void> {
+  const resp = await fetch(
+    `/api/captures/${captureId}/threads/${threadId}/messages`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+      credentials: "include",
+      signal: opts.signal,
+    }
+  );
+  if (!resp.ok || !resp.body) {
+    opts.onError?.("Request failed");
+    return;
+  }
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buffer.indexOf("\n\n")) >= 0) {
+      const frame = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 2);
+      const line = frame.replace(/^data:\s?/, "");
+      if (line === "[DONE]") return;
+      try {
+        const obj = JSON.parse(line);
+        if (obj.delta) opts.onDelta(obj.delta);
+        else if (obj.error) opts.onError?.(obj.error);
+      } catch {
+        // ignore malformed frame
+      }
+    }
+  }
 }
 
 export async function getFollowStream(

@@ -5,7 +5,66 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.llm import _get_client, analyze_conversation, ANALYSIS_SYSTEM_PROMPT
+from app.services.llm import (
+    _get_client,
+    analyze_conversation,
+    chat_stream,
+    ANALYSIS_SYSTEM_PROMPT,
+    CHAT_SYSTEM_PROMPT,
+)
+
+
+class _FakeAsyncStream:
+    """Minimal async-iterable mimicking the OpenAI streaming response."""
+
+    def __init__(self, chunks):
+        self._chunks = chunks
+
+    def __aiter__(self):
+        self._it = iter(self._chunks)
+        return self
+
+    async def __anext__(self):
+        try:
+            return next(self._it)
+        except StopIteration:
+            raise StopAsyncIteration
+
+
+def _delta_chunk(text):
+    return MagicMock(choices=[MagicMock(delta=MagicMock(content=text))])
+
+
+class TestChatStream:
+    def test_system_prompt_restricts_scope(self):
+        assert "capture" in CHAT_SYSTEM_PROMPT.lower()
+        assert "decline" in CHAT_SYSTEM_PROMPT.lower()
+
+    @pytest.mark.asyncio
+    async def test_streams_deltas_and_sends_context(self):
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=_FakeAsyncStream(
+                [_delta_chunk("Hello "), _delta_chunk("world"), _delta_chunk(None)]
+            )
+        )
+
+        with patch("app.services.llm._get_client", return_value=mock_client):
+            out = []
+            async for d in chat_stream(
+                "CONTEXT-XYZ",
+                [{"role": "user", "content": "earlier"}],
+                "What protocols are here?",
+            ):
+                out.append(d)
+
+        assert "".join(out) == "Hello world"
+        call = mock_client.chat.completions.create.call_args
+        assert call[1]["stream"] is True
+        messages = call[1]["messages"]
+        assert messages[0]["role"] == "system"
+        assert "CONTEXT-XYZ" in messages[0]["content"]
+        assert messages[-1]["content"] == "What protocols are here?"
 
 
 class TestGetClient:

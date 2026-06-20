@@ -1,152 +1,148 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import { AIAnalysisPanel } from "@/components/AIAnalysisPanel";
+
+const listChatThreads = vi.fn();
+const createChatThread = vi.fn();
+const getChatThread = vi.fn();
+const deleteChatThread = vi.fn();
+const streamChatMessage = vi.fn();
+
+vi.mock("@/api/client", () => ({
+  listChatThreads: (...a: any[]) => listChatThreads(...a),
+  createChatThread: (...a: any[]) => createChatThread(...a),
+  getChatThread: (...a: any[]) => getChatThread(...a),
+  deleteChatThread: (...a: any[]) => deleteChatThread(...a),
+  streamChatMessage: (...a: any[]) => streamChatMessage(...a),
+}));
 
 describe("AIAnalysisPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    listChatThreads.mockResolvedValue([]);
+    getChatThread.mockResolvedValue({ id: "t1", title: "t", created_at: "", messages: [] });
+    createChatThread.mockResolvedValue({
+      id: "t1",
+      title: "q",
+      created_at: "",
+      message_count: 0,
+    });
   });
 
-  it("renders idle state with instructions", () => {
-    render(<AIAnalysisPanel captureId="test-capture-id" />);
-    expect(screen.getByText("AI Conversation Analysis")).toBeInTheDocument();
-    expect(screen.getByText("Start Analysis")).toBeInTheDocument();
-    expect(screen.getByText(/AI analysis will inspect each conversation/i)).toBeInTheDocument();
+  it("renders the empty chat state and an input", async () => {
+    render(<AIAnalysisPanel captureId="cap-1" />);
+    expect(await screen.findByLabelText("Ask a question")).toBeInTheDocument();
+    expect(screen.getByText(/Ask a question about this capture/i)).toBeInTheDocument();
+    expect(screen.getByText("Run full analysis")).toBeInTheDocument();
   });
 
-  it('shows "Start Analysis" button when not running', () => {
-    render(<AIAnalysisPanel captureId="test-capture-id" />);
-    expect(screen.getByText("Start Analysis")).toBeInTheDocument();
+  it("sends a question and renders the streamed assistant reply", async () => {
+    streamChatMessage.mockImplementation(async (_c, _t, _q, opts) => {
+      opts.onDelta("DNS traffic looks healthy.");
+    });
+
+    render(<AIAnalysisPanel captureId="cap-1" />);
+    const input = await screen.findByLabelText("Ask a question");
+
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "Summarize the DNS traffic" } });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Send"));
+    });
+
+    expect(createChatThread).toHaveBeenCalled();
+    expect(await screen.findByText("Summarize the DNS traffic")).toBeInTheDocument();
+    expect(await screen.findByText("DNS traffic looks healthy.")).toBeInTheDocument();
   });
 
-  it("creates EventSource on Start Analysis click", async () => {
-    const mockEventSource = vi.fn();
+  it("stops an in-progress stream when Stop is clicked", async () => {
+    const abortSpy = vi.spyOn(AbortController.prototype, "abort");
+    // Never resolves until the signal aborts.
+    streamChatMessage.mockImplementation(
+      (_c: any, _t: any, _q: any, opts: any) =>
+        new Promise<void>((resolve) => {
+          opts.onDelta("partial answer");
+          opts.signal?.addEventListener("abort", () => resolve());
+        })
+    );
+
+    render(<AIAnalysisPanel captureId="cap-1" />);
+    const input = await screen.findByLabelText("Ask a question");
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "hi" } });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Send"));
+    });
+
+    // Streaming → Stop button is shown.
+    const stopBtn = await screen.findByLabelText("Stop");
+    await act(async () => {
+      fireEvent.click(stopBtn);
+    });
+
+    expect(abortSpy).toHaveBeenCalled();
+    // After stopping, the Send button returns and partial text is kept.
+    await waitFor(() => expect(screen.getByLabelText("Send")).toBeInTheDocument());
+    expect(screen.getByText("partial answer")).toBeInTheDocument();
+    abortSpy.mockRestore();
+  });
+
+  it("creates an EventSource on Run full analysis and renders events as text", async () => {
     const originalEventSource = (global as any).EventSource;
+    const created: any[] = [];
     (global as any).EventSource = vi.fn().mockImplementation((url: string) => {
-      const instance = new originalEventSource(url);
-      mockEventSource(url);
-      return instance;
-    });
-
-    render(<AIAnalysisPanel captureId="test-capture-id" />);
-
-    await act(async () => {
-      fireEvent.click(screen.getByText("Start Analysis"));
-    });
-
-    expect(mockEventSource).toHaveBeenCalledWith("/api/captures/test-capture-id/ai");
-
-    (global as any).EventSource = originalEventSource;
-  });
-
-  it("renders events received from SSE stream", async () => {
-    const events: any[] = [];
-    const originalEventSource = (global as any).EventSource;
-    (global as any).EventSource = vi.fn().mockImplementation(() => {
-      return {
-        url: "/api/captures/test-capture-id/ai",
-        readyState: 0,
+      const inst = {
+        url,
         onmessage: null as any,
         onerror: null as any,
         close: vi.fn(),
-        addEventListener: vi.fn(),
       };
+      created.push(inst);
+      return inst;
     });
 
-    render(<AIAnalysisPanel captureId="test-capture-id" />);
+    render(<AIAnalysisPanel captureId="cap-1" />);
+    await screen.findByText("Run full analysis");
     await act(async () => {
-      fireEvent.click(screen.getByText("Start Analysis"));
+      fireEvent.click(screen.getByText("Run full analysis"));
     });
 
-    // Manually fire an SSE message event
-    const es = ((global as any).EventSource as any).mock.results[0].value;
-    const messageEvent = new MessageEvent("message", {
-      data: JSON.stringify({
-        conversation_id: "conv-1",
-        proto: "tcp",
-        src: "10.0.0.1:443",
-        dst: "10.0.0.2:54321",
-        summary_markdown: "TLS handshake analysis.",
-        issues: [],
-      }),
-      origin: "http://localhost",
-    });
+    expect((global as any).EventSource).toHaveBeenCalledWith("/api/captures/cap-1/ai");
 
+    const xss = "<img src=x onerror='alert(1)'>";
     await act(async () => {
-      es.onmessage(messageEvent);
+      created[0].onmessage({
+        data: JSON.stringify({
+          conversation_id: "c1",
+          proto: "tcp",
+          src: "10.0.0.1:443",
+          dst: "10.0.0.2:5",
+          summary_markdown: xss,
+          issues: [],
+        }),
+      });
     });
 
-    expect(screen.getByText(/TLS handshake analysis/)).toBeInTheDocument();
-
-    (global as any).EventSource = originalEventSource;
-  });
-
-  it("button is disabled while running", async () => {
-    const originalEventSource = (global as any).EventSource;
-    (global as any).EventSource = vi.fn().mockImplementation(() => {
-      return {
-        url: "/api/captures/test-capture-id/ai",
-        readyState: 0,
-        onmessage: null as any,
-        onerror: null as any,
-        close: vi.fn(),
-        addEventListener: vi.fn(),
-      };
-    });
-
-    render(<AIAnalysisPanel captureId="test-capture-id" />);
-    await act(async () => {
-      fireEvent.click(screen.getByText("Start Analysis"));
-    });
-
-    expect(screen.getByText("Analyzing...")).toBeInTheDocument();
-
-    (global as any).EventSource = originalEventSource;
-  });
-
-  it("renders LLM output as text (no XSS via dangerouslySetInnerHTML)", async () => {
-    const originalEventSource = (global as any).EventSource;
-    (global as any).EventSource = vi.fn().mockImplementation(() => {
-      return {
-        url: "/api/captures/test-capture-id/ai",
-        readyState: 0,
-        onmessage: null as any,
-        onerror: null as any,
-        close: vi.fn(),
-        addEventListener: vi.fn(),
-      };
-    });
-
-    render(<AIAnalysisPanel captureId="test-capture-id" />);
-    await act(async () => {
-      fireEvent.click(screen.getByText("Start Analysis"));
-    });
-
-    const xssPayload =
-      "<img src=x onerror='fetch(\"/evil\")'> <script>alert(1)</script>";
-    const es = ((global as any).EventSource as any).mock.results[0].value;
-    const messageEvent = new MessageEvent("message", {
-      data: JSON.stringify({
-        conversation_id: "conv-xss",
-        proto: "tcp",
-        src: "10.0.0.1:443",
-        dst: "10.0.0.2:54321",
-        summary_markdown: xssPayload,
-        issues: [],
-      }),
-      origin: "http://localhost",
-    });
-
-    await act(async () => {
-      es.onmessage(messageEvent);
-    });
-
-    // The literal payload is visible as text — not executed as HTML.
-    expect(screen.getByText(xssPayload)).toBeInTheDocument();
-    // No <img> or <script> was injected into the DOM.
+    expect(screen.getByText(xss)).toBeInTheDocument();
     expect(document.querySelector("img[src='x']")).toBeNull();
-    expect(document.querySelector("script")).toBeNull();
 
     (global as any).EventSource = originalEventSource;
+  });
+
+  it("lists existing threads and allows deleting one", async () => {
+    listChatThreads.mockResolvedValue([
+      { id: "t1", title: "Why reset?", created_at: "", message_count: 2 },
+    ]);
+    deleteChatThread.mockResolvedValue(undefined);
+
+    render(<AIAnalysisPanel captureId="cap-1" />);
+    expect(await screen.findByText("Why reset?")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Delete chat"));
+    });
+    expect(deleteChatThread).toHaveBeenCalledWith("cap-1", "t1");
   });
 });

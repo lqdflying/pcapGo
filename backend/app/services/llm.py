@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from typing import AsyncIterator
 
 from openai import AsyncOpenAI
 
@@ -37,6 +38,60 @@ Respond with a JSON object containing:
   - "explanation": One sentence describing the issue and its impact
 
 If no issues are detected, return an empty issues array. Be concise. Only report issues that are clearly visible from the data provided."""
+
+
+CHAT_SYSTEM_PROMPT = """You are a packet-capture analysis assistant embedded in a Wireshark-like tool. \
+You help the user understand and troubleshoot ONE specific network capture, whose summary is provided below.
+
+Scope rules:
+- Only answer questions about analyzing this capture, or about networking and \
+network protocols relevant to interpreting it.
+- If the user asks something unrelated to this capture or to network/packet analysis \
+(for example general trivia, coding help, or personal questions), politely decline in \
+one sentence and steer them back to the capture.
+- Ground your answers in the provided capture context. If the context does not contain \
+enough information to answer, say so rather than inventing packet details.
+- Be concise and use plain language. Markdown is fine."""
+
+
+async def chat_stream(
+    context: str,
+    history: list[dict],
+    question: str,
+) -> AsyncIterator[str]:
+    """Stream an assistant reply to a user question about a capture.
+
+    ``context`` is a compact, pre-built summary of the capture. ``history`` is
+    the prior turns as ``[{"role": "user"|"assistant", "content": str}, ...]``.
+    Yields text deltas as they arrive so the API layer can forward them over SSE
+    and the user can stop generation mid-stream.
+    """
+    client = _get_client()
+
+    messages: list[dict] = [
+        {"role": "system", "content": f"{CHAT_SYSTEM_PROMPT}\n\n## Capture context\n{context}"}
+    ]
+    for m in history:
+        role = m.get("role")
+        content = m.get("content", "")
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": question})
+
+    stream = await client.chat.completions.create(
+        model=settings.llm_model,
+        messages=messages,
+        temperature=0.3,
+        stream=True,
+    )
+    async for chunk in stream:
+        choices = getattr(chunk, "choices", None)
+        if not choices:
+            continue
+        delta = getattr(choices[0], "delta", None)
+        text = getattr(delta, "content", None) if delta else None
+        if text:
+            yield text
 
 
 # Extract the first {...} JSON object from a model response. Handles raw JSON,
