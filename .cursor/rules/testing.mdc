@@ -1,0 +1,210 @@
+---
+description: Testing patterns for backend pytest and frontend vitest
+globs: tests/**/*,frontend/src/__tests__/**/*
+alwaysApply: false
+---
+
+# Testing Rules
+
+## Backend Tests
+
+### Running Tests
+```bash
+# From backend/ dir — reads testpaths from pytest.ini
+cd backend && python -m pytest -v
+```
+Requires PostgreSQL running locally: `pcap:pcap@localhost:5432/pcap_test`
+
+### Test Structure
+```
+tests/backend/
+├── api/            # Integration tests (httpx.AsyncClient + ASGITransport)
+├── models/         # Model CRUD tests (SQLAlchemy async sessions)
+├── services/       # Service-level tests (currently empty)
+├── unit/           # Pure unit tests (no DB)
+├── conftest.py     # Shared fixtures (session-scoped engine, per-test DELETE)
+└── test_migrations.py
+```
+
+### Conftest Design
+- **sys.path fix** at top: inserts `backend/` and project root so `from app.xxx` imports work from the test location.
+- **Session-scoped async engine** shared between app and test fixtures via patching `app.db.session`.
+- **Per-test isolation**: `_delete_all` fixture runs `DELETE FROM` all tables in reverse dependency order before each test.
+- **Unique test data**: counter-based `github_id`/`login` in `auth_user_data` prevents collisions.
+- **`parse_pcap` mocked** via `monkeypatch` on `app.api.uploads.parse_pcap` to prevent background task interference.
+- **httpx.AsyncClient** with `ASGITransport` (not Starlette TestClient) to avoid event-loop conflicts.
+- **pytest-asyncio config**: `asyncio_mode=auto`, both loop scopes set to `session`.
+- **pytest.ini**: `testpaths = ../tests/backend`, `pythonpath = .`, markers `unit`, `integration`, `slow`.
+
+### Writing New Backend Tests
+1. API integration tests go in `tests/backend/api/`, use `@pytest.mark.integration`.
+2. Model tests go in `tests/backend/models/`, use the `db_session` fixture.
+3. Service tests go in `tests/backend/services/`.
+4. Unit tests go in `tests/backend/unit/`, use `@pytest.mark.unit`.
+5. Always use `async def` for test functions and `await` client calls (`.post()`, `.get()`, `.delete()`).
+6. Use `test_client_authenticated` for auth-required endpoints.
+7. Use `test_client` for public endpoints.
+8. Use `auth_user`, `test_capture`, `test_conversation` fixtures for test data.
+
+### Pcap Upload Tests
+Use `make_minimal_pcap_bytes()` helper (defined in `tests/backend/api/test_uploads.py`) to generate valid minimal pcap bytes:
+- 24-byte global header + 16-byte packet header + 60-byte payload.
+- Valid magic number (0xA1B2C3D4), version 2.4, Ethernet linktype.
+
+### Packet/Stats/Analysis Tests
+- Write fake `.index.json` + `.jsonl` files to disk for parsed captures.
+- Mock `analyze_conversation` for AI analysis tests.
+- Mock `settings.llm_api_key` with `monkeypatch` for LLM config tests.
+- Clean up temp files in `finally` blocks.
+
+---
+
+## Frontend Tests
+
+### Running Tests
+```bash
+# From frontend/ — vitest config lives in vite.config.ts
+cd frontend && npx vitest run
+
+# Watch mode
+cd frontend && npx vitest
+
+# Type checks
+cd frontend && npm run typecheck
+cd frontend && npm run typecheck:test
+```
+
+### Test Structure (12 test files under `frontend/src/__tests__/`)
+```
+frontend/src/__tests__/
+├── test-setup.ts                # Global mocks + mock data factories
+├── App.test.tsx                 # Router + auth routing integration
+├── api/
+│   └── client.test.ts          # Axios API client + 401 interceptor
+├── lib/
+│   └── store.test.ts           # Zustand stores (useAuthStore, useCaptureStore)
+├── components/
+│   ├── Uploader.test.tsx        # File drop validation
+│   ├── PacketList.test.tsx      # Virtualized list rendering
+│   ├── PacketTree.test.tsx      # Protocol layer tree expand/collapse + layer selection highlights hex
+│   ├── HexViewer.test.tsx       # Hex/ASCII dump formatting + highlighted byte ranges
+│   ├── StatsTabs.test.tsx       # Statistics tab navigation + Tx/Rx columns + IO graph controls
+│   └── AIAnalysisPanel.test.tsx # SSE event parsing + rendering
+└── pages/
+    ├── Login.test.tsx           # Unauthenticated redirect to GitHub
+    ├── Dashboard.test.tsx       # Upload + captures list + delete confirmation
+    └── Capture.test.tsx         # 3-pane inspector with view mode toggle + protocol dropdown + pagination
+```
+
+### Config (in `frontend/vite.config.ts` test block)
+- `environment: "jsdom"` — browser-like DOM in Node.
+- `globals: true` — `describe`, `it`, `expect`, `vi` available without imports.
+- `setupFiles: ["./src/test-setup.ts"]` — global mocks + DOM matchers.
+- `css: false` — CSS not processed in tests (faster).
+- Alias `@` -> `./src` so source imports use `@/components/Foo`.
+
+### Test Setup (`frontend/src/test-setup.ts` and `src/__tests__/test-setup.ts`)
+Provides global mocks needed by all tests:
+- `window.location` (redirect testing)
+- `window.matchMedia` (media query stubs)
+- `ResizeObserver` (required by TanStack Virtual)
+- `Element.prototype.scrollTo` (virtualizer)
+- `EventSource` (SSE testing — `onmessage`, `onerror`, `close`, `dispatchEvent`)
+
+Also exports 7 mock data factories:
+- `createMockUser()`, `createMockCapture()`, `createMockPacketSummary()`
+- `createMockPacketDetail()`, `createMockLayerNode()`
+- `createMockStatisticsResponse()`, `createMockAnalysisEvent()`
+
+All accept an `overrides` object for test-specific customization.
+
+### Testing Patterns by Category
+
+#### Pure Logic Tests (store, API client)
+```typescript
+// Zustand stores — no React rendering needed
+import { useAuthStore } from "@/lib/store";
+beforeEach(() => useAuthStore.setState({ user: null, loading: true }));
+useAuthStore.getState().setUser(mockUser);
+expect(useAuthStore.getState().user).toEqual(mockUser);
+
+// API client — mock axios via vi.hoisted()
+const { mockGet } = vi.hoisted(() => ({ mockGet: vi.fn() }));
+vi.mock("axios", () => ({ default: { create: () => ({ get: mockGet }) } }));
+mockGet.mockResolvedValue({ data: mockUser });
+const result = await getUser();
+expect(mockGet).toHaveBeenCalledWith("/auth/me");
+```
+
+#### Simple Component Tests (props-driven, no router/query)
+```typescript
+import { render, screen, fireEvent } from "@testing-library/react";
+import { PacketTree } from "@/components/PacketTree";
+const detail = createMockPacketDetail();
+render(<PacketTree detail={detail} loading={false} />);
+expect(screen.getByText("Ethernet")).toBeInTheDocument();
+// Interaction
+fireEvent.click(screen.getByText("Ethernet"));
+```
+
+Cover these states: loading (null data + loading=true), empty (no data), populated (valid data), and edge cases.
+
+#### Drag-and-Drop Component Tests
+```typescript
+const { container } = render(<Uploader onUpload={mockOnUpload} uploading={false} />);
+const dropZone = container.querySelector("div")!;
+const file = new File([new ArrayBuffer(100)], "test.pcap", { type: "application/octet-stream" });
+fireEvent.drop(dropZone, { dataTransfer: { files: [file], items: [], types: [] } });
+expect(mockOnUpload).toHaveBeenCalledWith(file);
+```
+
+Test both valid extensions (.pcap, .pcapng, .cap) and invalid ones (.txt, no extension).
+
+#### Page/Integration Tests (Router + QueryClient + Store)
+```typescript
+import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+function renderPage(initialRoute = "/") {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[initialRoute]}>
+        <ComponentUnderTest />
+      </MemoryRouter>
+    </QueryClientProvider>
+  );
+}
+
+// Mock sub-pages to isolate routing logic
+vi.mock("@/pages/Login", () => ({ LoginPage: () => <div>LoginPage</div> }));
+
+// Inject auth state via Zustand
+useAuthStore.setState({ user: createMockUser(), loading: false });
+// Mock API responses
+vi.mock("@/api/client", () => ({
+  getUser: vi.fn().mockRejectedValue(new Error("not logged in")),
+}));
+```
+
+#### SSE Testing (AIAnalysisPanel)
+```typescript
+// EventSource is mocked globally in test-setup.ts
+// Dispatch events to simulate SSE stream
+const eventSource = window.EventSource.mock.instances[0];
+eventSource.onmessage({ data: JSON.stringify(createMockAnalysisEvent()) });
+// Verify rendered output
+expect(screen.getByText("Diagnostic summary text")).toBeInTheDocument();
+```
+
+### Writing New Frontend Tests
+1. Place test files in `frontend/src/__tests__/`, mirroring the source structure.
+2. Import source components via `@/` alias (e.g., `@/components/PacketTree`, `@/lib/store`).
+3. Import test-setup factories from `./test-setup` or `../test-setup` (relative to test file depth).
+4. Wrap pages in `<QueryClientProvider>` + `<MemoryRouter>`.
+5. Inject auth state via Zustand `.setState()`, not React context.
+6. Mock API calls with `vi.mock("@/api/client", ...)` using the `@/` alias.
+7. Simulate user interactions with `fireEvent` (click, drop, change).
+8. Test loading, empty, populated, and error states for every data-driven component.
+9. Call `vi.clearAllMocks()` in `beforeEach` when multiple tests share mock state.
+10. Keep test files excluded from the app TypeScript build (`tsconfig.json` already excludes `src/__tests__` and `src/test-setup.ts`).

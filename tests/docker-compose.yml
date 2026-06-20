@@ -1,0 +1,60 @@
+# Test / Development Docker Compose
+# Full 3-container stack: PostgreSQL, backend, nginx
+# Used for end-to-end testing and local development.
+# Run from project root:  docker compose -f tests/docker-compose.yml up -d
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      # Configurable host port so multiple test stacks or a host postgres
+      # can coexist. Default 5432 matches the conftest DATABASE_URL.
+      - "${POSTGRES_TEST_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: pcap
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pcap}
+      POSTGRES_DB: ${POSTGRES_DB:-pcap_test}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pcap -d ${POSTGRES_DB:-pcap_test}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  web:
+    build: ../backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://pcap:pcap@postgres:5432/pcap_test}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
+      GITHUB_OAUTH_REDIRECT_URL: ${GITHUB_OAUTH_REDIRECT_URL:-http://localhost:8000/auth/github/callback}
+      JWT_SECRET: ${JWT_SECRET:-test-secret-not-for-production-use-32chars}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com/v1}
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_MODEL: ${LLM_MODEL:-deepseek-chat}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-100}
+    volumes:
+      - uploads:/app/uploads
+
+  nginx:
+    build:
+      # Build context is the project root (so both frontend/ and
+      # nginx/nginx.conf are visible to COPY). dockerfile paths resolve
+      # relative to the context, not relative to this compose file.
+      context: ..
+      dockerfile: tests/Dockerfile.nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    depends_on:
+      - web
+
+volumes:
+  pgdata:
+  uploads:

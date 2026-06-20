@@ -1,0 +1,111 @@
+---
+description: Image build, tagging, Harbor push, cosign signing, and vulnerability scanning
+alwaysApply: true
+---
+
+# Release & Image Publishing Rules
+
+## Registry & Image Path
+- **Registry**: private Harbor at `img.aksg.net` (Harbor v2.15.0).
+- **Image**: `img.aksg.net/pcapgo/pcapgo` — Harbor **project** `pcapgo`, **repository** `pcapgo`. Always use the full `project/repository` form (NOT `img.aksg.net/pcapgo`, which is a different/invalid path).
+- **Auth**: Harbor credentials live in `~/.docker/config.json` (already configured for `img.aksg.net` as a robot account `robot$ci-global`). This account has **push + pull** scope only — it CANNOT set project configuration, metadata, or CVE allowlists (returns `403 Forbidden`). Project-admin actions (allowlists, content-trust policy, tag immutability) must be done in the Harbor UI or with an admin credential.
+
+## Cosign Signing (key-based)
+Harbor enforces Cosign content trust — every published image MUST be signed before it can be pulled. Signing is **key-based** (not keyless).
+
+- **cosign binary**: `~/.local/bin/cosign` (v3.1.1+). Ensure it's on PATH: `export PATH="$HOME/.local/bin:$PATH"`.
+- **Key material** lives OUTSIDE the repo, at `~/.config/pcapgo/`:
+  - `cosign.key` — private key (chmod 600). Never commit, never bake into an image.
+  - `cosign.pub` — public key (safe to share; configure in Harbor / admission controllers for verification).
+  - `cosign.password` — password for the private key (chmod 600). Load via `export COSIGN_PASSWORD="$(cat ~/.config/pcapgo/cosign.password)"`.
+- To regenerate keys: `cosign generate-key-pair` (prompts for / accepts `COSIGN_PASSWORD` env var). Rotate via the same command if the key is compromised.
+
+## Versioning & Tags
+- **Git-tag-driven**. A release tag has the form `v<semver>` (e.g. `v0.0.1`).
+- Each release produces **two Harbor tags** for one image (same manifest/digest):
+  - `img.aksg.net/pcapgo/pcapgo:<version>` (e.g. `0.0.1`) — **immutable**, one per release. Never re-push a version tag.
+  - `img.aksg.net/pcapgo/pcapgo:latest` — **mutable**, always points at the newest release. Re-pushed on every release.
+- **The triad must correspond**: the git tag `v0.0.1`, the Harbor `0.0.1` tag, and the source code state (the commit) must all refer to the same code. Build the image from the exact commit you tag.
+- **GitHub tag prerequisite**: the local branch MUST have commits before you can tag (`git tag` fails on a branch with no commits). Commit + push the working tree first, then tag.
+
+## Base Images — Always Pull Latest
+The root `Dockerfile` (and `tests/Dockerfile.nginx`) use Wolfi base images from the internal 0-CVE registry:
+- `img.aksg.net/nodejs/nodejs:latest`
+- `img.aksg.net/python/wolfi-python312:latest`
+
+**Every build MUST use the latest base.** Enforce this one of two ways:
+1. `docker build --pull ...` — forces Docker to pull base images fresh, ignoring cached copies. **Preferred** (atomic, can't be forgotten).
+2. Explicit pre-pull before building:
+   ```bash
+   docker pull img.aksg.net/nodejs/nodejs:latest
+   docker pull img.aksg.net/python/wolfi-python312:latest
+   docker build ...
+   ```
+With `docker compose build`, pass `--pull` as well (`docker compose build --pull`).
+
+## Release Procedure (manual, run from the repo root)
+No release script is committed to the repo by decision; run these commands directly. Substitute `VERSION` (e.g. `0.0.1`).
+
+```bash
+cd /home/opc/pcapGo
+export PATH="$HOME/.local/bin:$PATH"   # cosign
+VERSION=0.0.1
+IMAGE=img.aksg.net/pcapgo/pcapgo
+
+# 1. Ensure the working tree matches what you want to release.
+#    Commit + push to origin/main FIRST (git tag requires commits on the branch).
+#    The GitHub tag v$VERSION will point at this commit.
+
+# 2. Pull latest base images (forces every build to use current bases).
+docker pull img.aksg.net/nodejs/nodejs:latest
+docker pull img.aksg.net/python/wolfi-python312:latest
+
+# 3. Build with --pull, tagged with version + latest.
+docker build --pull \
+  -t $IMAGE:$VERSION \
+  -t $IMAGE:latest \
+  .
+
+# 4. Push both tags to Harbor (uses ~/.docker/config.json auth).
+docker push $IMAGE:$VERSION
+docker push $IMAGE:latest
+# Capture the digest from the pushed manifest (authoritative, post-push).
+DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $IMAGE:$VERSION | sed 's/.*@//')
+
+# 5. Sign with cosign (key-based). Sign by DIGEST (integrity-preserving,
+#    avoids cosign's tag-deprecation warning). One digest signature covers
+#    both :$VERSION and :latest since they point at the same manifest.
+export COSIGN_PASSWORD="$(cat ~/.config/pcapgo/cosign.password)"
+cosign sign --key ~/.config/pcapgo/cosign.key --yes $IMAGE@$DIGEST
+
+# 6. Verify the signature (recommended).
+cosign verify --key ~/.config/pcapgo/cosign.pub $IMAGE@$DIGEST
+
+# 7. Create + push the matching GitHub tag.
+git tag v$VERSION
+git push origin v$VERSION
+```
+
+## Vulnerability Scanning & CVE Allowlist
+- **Trivy** is Harbor's scanner. It **auto-scans on push** — no manual scan needed. Verify scan status via Harbor UI or `GET /api/v2.0/projects/pcapgo/repositories/pcapgo/artifacts/<tag>?with_scan_overview=true`.
+- **CVE allowlist** is a **Harbor project-admin action** (the robot credential CANNOT set it — `403 Forbidden`). Configure it in the Harbor UI:
+  - Project `pcapgo` → **Configuration** → **CVE Allowlist** → add CVE IDs → save.
+  - Or via API with an **admin** credential (not the robot):
+    ```bash
+    curl -X PUT -H "Authorization: Basic <admin-base64>" -H "Content-Type: application/json" \
+      --data '{"metadata":{"cve_allowlist":"CVE-XXXX-YYYY,CVE-XXXX-YYYY"}}' \
+      https://img.aksg.net/api/v2.0/projects/pcapgo
+    ```
+- After changing the allowlist, **rescan** the artifact so Trivy re-evaluates against the new list (Harbor UI → artifact → Scan, or `POST .../artifacts/<tag>/scan`).
+- Allowlisted vulns show **Listed In CVE Allowlist = Yes** in the scan results; the project vuln count drops accordingly.
+- Rebuilding an image WITHOUT changing dependencies does NOT change scan results — only fix the deps (version bumps) OR apply the allowlist. Don't churn identical rebuilds expecting different scan output.
+
+## Operational Notes
+- **Re-pushing `latest` over an already-signed tag**: Harbor may return `412 Precondition Failed` when overwriting a signed manifest with an unsigned push (Harbor protects signed artifacts). If this happens, delete the old `latest` tag in Harbor first, or push by digest and re-point the tag. Version tags (`0.0.1`, `0.0.2`, ...) are immutable and never hit this.
+- **Harbor content trust is a pull-side policy**: it blocks *pulls* of unsigned images, not pushes. The required sequence is still push → `cosign sign` (uploads the signature). A freshly pushed image is unsigned until `cosign sign` completes — pulls will fail in that window.
+- **Sign by digest (default)**: the procedure signs `$IMAGE@$DIGEST` rather than `$IMAGE:$TAG`. This is the integrity-preserving form cosign recommends — tag-based signing is deprecated and will be removed. Since `:$VERSION` and `:latest` point at the same manifest, one digest signature covers both tags. (Tag-based signing also works today and Harbor recognizes it, but prefer digest.)
+- **Harbor v2.15 + cosign 3.x interop**: cosign 3.x stores signatures as OCI 1.1 referrers by default. Harbor v2.15.0 recognizes these — the signature appears under the artifact in the Harbor UI and `cosign verify` confirms validity. The Harbor REST `signatures`/`accessories` fields may report `null` in some API responses even when the signature is present and recognized; the authoritative checks are the **Harbor UI signature badge** and **`cosign verify`**. Do NOT re-sign to "fix" a null `signatures` API field unless both the UI and `cosign verify` agree the signature is missing — re-signing just adds duplicate signatures.
+- **Secrets**: Harbor credentials in `~/.docker/config.json`; cosign private key + password in `~/.config/pcapgo/`. Neither is ever committed to the repo. `.gitignore` covers `.env`; keep cosign material outside the repo as it already is. Never print the `.auth` field of `~/.docker/config.json` (it contains base64-encoded credentials).
+
+## Release Record
+- **v0.0.1** (first release): image `img.aksg.net/pcapgo/pcapgo:0.0.1` + `:latest`, digest `sha256:10e6e93f780511c81616ccfd6e868c2aaf6d91875e3b28477c17d6cdd5ba5b9e`, built with `--pull`, cosign-signed (key-based), verified. Trivy scan: 8 vulns (4 High / 3 Medium / 1 Low, 7 fixable) in `starlette` 0.46.2 and `ecdsa` 0.19.2 — **all 8 allowlisted** in Harbor (CVE-2024-23342, CVE-2025-62727, CVE-2026-48818, CVE-2026-54283, CVE-2025-54121, CVE-2026-48710, CVE-2026-48817, CVE-2026-54282). GitHub tag `v0.0.1` pending commit prerequisite. Known deferred fixes: starlette → ≥1.3.1 (requires fastapi upgrade past 0.115); ecdsa → no fix available (would require migrating `python-jose` → `pyjwt`).

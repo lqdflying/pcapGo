@@ -1,0 +1,66 @@
+---
+description: Backend conventions for FastAPI/Python code
+globs: backend/**/*.py
+alwaysApply: false
+---
+
+# Backend Development Rules
+
+## Stack
+Python 3.12, FastAPI, SQLAlchemy 2 (async), Alembic, Pydantic v2, scapy, python-jose (JWT), authlib (OAuth), httpx, OpenAI SDK, aiofiles, python-multipart, itsdangerous, psycopg2-binary (Alembic sync driver).
+
+## Database
+- All database access goes through `async_session` from `app.db.session`.
+- Use the `async with async_session() as session:` pattern.
+- Models live in `app/models/`, schemas in `app/schemas/`.
+- `Base` is defined in `app.db.session`; import `app.models` to register all tables.
+- Enum types use `str, enum.Enum` + `SAEnum` for PostgreSQL compatibility.
+- Alembic migrations use a synchronous driver; `env.py` strips `+asyncpg`/`+psycopg_async` from `DATABASE_URL`.
+
+## API Routes
+- Prefixes: `/api/captures`, `/auth`, `/api/health`.
+- Dependencies: `get_current_user` for auth; routes open their own `async_session()` context for DB access.
+- Uploads: `POST /api/captures` — validates extensions (.pcap, .pcapng, .cap) and pcap magic bytes, streams to a temp file, enforces `max_upload_bytes`, creates the DB record, and spawns `parse_pcap` as a background task.
+- Captures: `GET /api/captures` lists with pagination; `GET /api/captures/{id}` reads one; `DELETE /api/captures/{id}` removes the DB row and best-effort filesystem sidecars (`.jsonl`, `.index.json`) plus evicts the in-memory index cache.
+- Packets: `GET /api/captures/{id}/packets` reads `index.json`, supports `?proto=`, `?offset=`, `?limit=` (default 200, max 10000, filter applies to total). `GET /api/captures/{id}/packets/{packet_idx}` returns full detail from `.jsonl`.
+- Statistics: `GET /api/captures/{id}/statistics` — aggregates from conversations; query params `bucket_seconds` (snaps to `{1, 10, 30, 60}` seconds) and `metric` (`packets` or `bytes`).
+- Analysis: `GET /api/captures/{id}/ai` — SSE streaming; aborts if the client disconnects; persists only successful analyses.
+
+## Models (`app/models/capture.py`)
+- `Capture`: id, user_id, filename, size_bytes, sha256, linktype (default 1), packet_count, status (`CaptureStatus` enum), stored_path, parsed_index_path, created_at.
+- `Conversation`: id, capture_id, proto, src_ip, src_port, dst_ip, dst_port, packet_count, byte_count, start_ts, end_ts, app_protocol, flags_summary (comma-separated TCP flag names, e.g. `SYN,ACK`).
+- `Analysis`: id, conversation_id, model, prompt_tokens, completion_tokens, summary_markdown, issues_json, created_at.
+
+## Models (`app/models/user.py`)
+- `User`: id, github_id (unique), login, email, name, avatar_url, created_at.
+
+## Pcap Parser (`app/services/pcap_parser.py`)
+- `parse_pcap(capture_id)` — background task, offloaded via `asyncio.to_thread`.
+- Uses `scapy.utils.PcapReader` (streaming).
+- Writes `capture_id.jsonl` (per-packet records) + `capture_id.index.json` (byte offsets + summaries for O(1) random access).
+- Calls `build_conversations()` from `app/services/flows.py`.
+- Updates capture status: uploaded -> parsing -> ready/failed.
+- Application protocol detection is centralized here (`_TCP_PORT_PROTOCOLS`, `_UDP_PORT_PROTOCOLS`) and mirrors `wiki/Uploading-and-Analyzing.md`.
+
+## Packet Index Cache (`app/api/packets.py`)
+- `packets.py` keeps an in-memory LRU cache of parsed `index.json` files keyed by `(path, mtime_ns, size)`.
+- `_evict_index()` is called on capture deletion so re-uploads never surface stale indices.
+
+## Startup Recovery (`app/main.py`)
+- On startup `_reset_stuck_captures()` flips any capture still in `parsing` status to `failed`, because FastAPI BackgroundTasks do not survive a worker restart.
+
+## Settings (`app/config.py`)
+- Pydantic `BaseSettings` with `.env` file support, `extra="ignore"`.
+- Security knobs: `dev_mode` (relaxes secret validation; never in production), `cookie_secure` (default true), `session_secret` (fallback to JWT_SECRET in dev), `jwt_expire_minutes`.
+- Insecure defaults (`CHANGE_ME`, empty, etc.) raise on startup unless `dev_mode=true`.
+
+## Standalone Frontend Serving (`app/main.py`)
+- When `SERVE_FRONTEND=true` and `FRONTEND_DIR` (default `/app/frontend-dist`) exists, the built SPA is mounted via `StaticFiles(directory=_FRONTEND_DIR, html=True)` at `/`.
+- API/auth routes take priority.
+
+## Key Dependencies
+```
+fastapi, uvicorn, sqlalchemy[asyncio], asyncpg, alembic, pydantic-settings
+scapy, python-jose[cryptography], authlib, httpx, openai, python-multipart,
+aiofiles, itsdangerous, psycopg2-binary
+```

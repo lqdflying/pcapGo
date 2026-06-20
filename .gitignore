@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+venv/
+.venv/
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Uploads
+uploads/
+
+# Node
+node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+
+# Vite
+.vite/
+
+# Pytest cache
+.pytest_cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+pgdata/
+
+# Alembic
+*.db
+
+# Wiki (separate git repo — github.com/lqdflying/pcapGo.wiki.git)
+wiki/

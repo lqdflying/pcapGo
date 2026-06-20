@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #181825;
+}
+::-webkit-scrollbar-thumb {
+  background: #313244;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #45475a;
+}
+
+/* Wireshark-style packet row colors */
+.tr-tcp { background-color: rgba(162, 210, 255, 0.06); }
+.tr-udp { background-color: rgba(180, 137, 255, 0.06); }
+.tr-icmp { background-color: rgba(255, 182, 184, 0.06); }
+.tr-other { background-color: rgba(202, 211, 245, 0.04); }
+
+/* Selected row */
+.tr-selected { background-color: rgba(137, 180, 250, 0.15) !important; }
+
+/* Resizable panels handle */
+[data-panel-group] > [data-resize-handle] {
+  transition: background-color 0.15s;
+}
+[data-panel-group] > [data-resize-handle]:hover {
+  background-color: #89b4fa;
+}

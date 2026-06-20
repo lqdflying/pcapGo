@@ -1,0 +1,26 @@
+# Multi-stage: build React app, then serve with nginx.
+#
+# Base images come from the internal 0-CVE registry (Wolfi-based):
+#   - img.aksg.net/nodejs/nodejs:latest  (Node 24 + npm)
+#   - img.aksg.net/nginx/nginx:latest    (nginx 1.30)
+#
+# Build context is the project root (see tests/docker-compose.yml), so COPY
+# paths like frontend/ and nginx/nginx.conf resolve from the repo root.
+FROM img.aksg.net/nodejs/nodejs:latest AS build
+
+WORKDIR /app
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm ci || npm install
+
+COPY frontend/ .
+RUN npm run build
+
+FROM img.aksg.net/nginx/nginx:latest
+
+RUN mkdir -p /usr/share/nginx/html
+
+COPY --from=build /app/dist /usr/share/nginx/html
+COPY nginx/nginx.conf /etc/nginx/nginx.conf
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

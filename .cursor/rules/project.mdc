@@ -1,0 +1,139 @@
+---
+description: Project-wide overview and conventions for pcapGo
+alwaysApply: true
+---
+
+# pcapGo — Project Rules
+
+## Overview
+A self-hosted web app for uploading and analyzing network packet captures (.pcap/.pcapng). Wireshark-style 3-pane inspection, statistical analysis, and AI-powered per-conversation diagnostics via any OpenAI-compatible LLM.
+
+## Repository Structure
+```
+pcapGo/
+├── Dockerfile                 # Root multi-stage build (frontend + backend, production)
+├── docker-compose.prod.yml    # SAMPLE: single-container prod compose (copy into a host deploy dir)
+├── backend/                   # FastAPI (Python 3.12)
+│   ├── app/
+│   │   ├── api/               # Route handlers (auth, uploads, packets, statistics, analysis)
+│   │   ├── core/              # Security helpers (JWT cookie auth)
+│   │   ├── db/                # Async engine, session, Base
+│   │   ├── models/            # SQLAlchemy ORM models (User, Capture, Conversation, Analysis)
+│   │   ├── schemas/           # Pydantic v2 response models
+│   │   └── services/          # pcap_parser (scapy), flows, LLM
+│   ├── alembic/               # DB migrations (single revision 0001_initial.py)
+│   ├── pytest.ini             # pytest config (testpaths points to ../tests/backend)
+│   ├── Dockerfile             # Backend-only build (test compose)
+│   ├── entrypoint.sh          # Runs alembic upgrade head then starts uvicorn
+│   └── requirements.txt
+├── frontend/                  # React 18 + TypeScript + Vite + Tailwind CSS
+│   ├── src/
+│   │   ├── api/               # Axios API client + TypeScript interfaces
+│   │   ├── components/        # Uploader, PacketList, PacketTree, HexViewer, StatsTabs, AIAnalysisPanel
+│   │   ├── lib/               # Zustand stores (useAuthStore, useCaptureStore)
+│   │   ├── pages/             # Login, Dashboard, Capture
+│   │   ├── __tests__/         # vitest tests (12 test files)
+│   │   └── test-setup.ts      # symlink to src/__tests__/test-setup.ts
+│   └── vite.config.ts         # Includes vitest config (setupFiles + globals)
+├── tests/
+│   ├── .env.example           # Test/dev env template (full 3-container local stack)
+│   ├── Dockerfile.nginx       # Multi-stage frontend + nginx build (test compose)
+│   ├── docker-compose.yml     # 3-container test stack (postgres + web + nginx)
+│   └── backend/               # pytest tests (~170 total)
+│       ├── conftest.py        # Shared async fixtures, sys.path patch
+│       ├── api/               # Integration tests (httpx.AsyncClient + ASGITransport)
+│       ├── models/            # Model CRUD tests
+│       ├── services/          # Service-level tests (currently empty)
+│       ├── unit/              # Pure unit tests
+│       └── test_migrations.py
+├── nginx/nginx.conf           # Nginx proxy config; explicitly does NOT serve /uploads
+├── uploads/                   # Per-user pcap files and JSONL/index sidecars
+├── wiki/                      # GitHub wiki (separate git repo)
+└── .env.sample                # SAMPLE: prod env template (copy into a host deploy dir)
+```
+
+## Tech Stack
+- **Backend**: Python 3.12, FastAPI, SQLAlchemy 2 (async + asyncpg), Alembic, Pydantic v2, scapy
+- **Database**: PostgreSQL 16
+- **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, TanStack Query, TanStack Virtual
+- **Auth**: GitHub OAuth via authlib + JWT cookie (`pcap_session`) using python-jose
+- **LLM**: OpenAI SDK (configurable base_url for any compatible API)
+- **Infra**: Docker Compose, Nginx
+
+## Deployment Modes
+| Mode | Compose File | Containers | Base Images |
+|------|-------------|-----------|-------------|
+| **Production (1Panel)** | `docker-compose.prod.yml` | 1 (web) | Internal Wolfi-based Node 24 + Python 3.12 images (`img.aksg.net/...`) |
+| **Testing / Dev** | `tests/docker-compose.yml` | 3 (postgres + web + nginx) | `postgres:16-alpine`, internal Node/Python/nginx images |
+
+Production mode uses the root `Dockerfile`, which bundles the React SPA into the Python image. The backend serves the frontend via `StaticFiles` when `SERVE_FRONTEND=true`.
+
+> **Sample vs. live deployment:** `docker-compose.prod.yml` and `.env.sample` in this repo are **sample templates**. The live deployment lives in a separate directory on the host (e.g. `~/pcapgo-deploy/`) holding copies named `docker-compose.yml` + `.env` with real secrets; the repo stays free of production secrets. The deploy compose builds from this repo's `Dockerfile` (point `build.context` at the repo, or pre-build an image).
+
+> **Image publishing:** building, tagging (`img.aksg.net/pcapgo/pcapgo:<version>` + `:latest`), pushing to Harbor, key-based cosign signing, and Trivy vulnerability scanning / CVE allowlisting are all documented in `release.mdc`. Versions are git-tag-driven (`v0.0.1` → GitHub tag + Harbor `0.0.1` + `latest`). Always build with `--pull` so base images are refreshed to latest on every build.
+
+## Database
+- Engine: `postgresql+asyncpg`
+- Session: `async_sessionmaker` with `expire_on_commit=False`
+- Models: `User`, `Capture` (status enum: uploaded/parsing/ready/failed), `Conversation`, `Analysis`
+- Migrations: Alembic in `backend/alembic/`
+
+## Key Conventions
+- All Python files start with `from __future__ import annotations`.
+- All API routes return Pydantic response models except `/api/captures/{id}/ai` (SSE `StreamingResponse`).
+- Uploads are streamed to a temp file, validated by pcap magic bytes, then atomically renamed to `uploads/<user_id>/<capture_id>.pcap`.
+- Parsing runs as a FastAPI `BackgroundTask` and is offloaded to a worker thread with `asyncio.to_thread`.
+- Captures never expose `/uploads/` via StaticFiles or nginx; files are served only through authenticated API routes.
+- Auth is cookie-based via `pcap_session` containing a JWT (configurable lifetime via `JWT_EXPIRE_MINUTES`).
+- `DATABASE_URL` controls the DB connection.
+- Settings are loaded via Pydantic `BaseSettings` with `.env` file support and `extra="ignore"`.
+
+## How to Run
+```bash
+# Production (1Panel) — single container, from a host deploy dir.
+# Samples (docker-compose.prod.yml, .env.sample) are copied from this repo into
+# the deploy dir as docker-compose.yml + .env; build.context points back here.
+cd ~/pcapgo-deploy && docker compose up -d --build
+
+# Testing / Dev — full 3-container stack
+docker compose -f tests/docker-compose.yml up -d
+
+# Development backend (no Docker)
+cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload --port 8000
+
+# Development frontend (no Docker)
+cd frontend && npm install && npm run dev
+```
+
+## How to Test
+```bash
+# All backend tests (requires PostgreSQL on localhost:5432 with pcap_test)
+cd backend && python -m pytest -v
+
+# Backend unit tests only
+cd backend && python -m pytest ../tests/backend/unit/ -v
+
+# Backend API integration tests only
+cd backend && python -m pytest ../tests/backend/api/ -v
+
+# All frontend tests (vitest + jsdom, no backend needed)
+cd frontend && npx vitest run
+
+# Frontend tests in watch mode
+cd frontend && npx vitest
+
+# Frontend TypeScript checks
+cd frontend && npm run typecheck
+cd frontend && npm run typecheck:test
+```
+Test DB: `postgresql+asyncpg://pcap:pcap@localhost:5432/pcap_test`
+
+### Test Coverage Summary
+- **Backend**: ~170 tests (unit + integration + migrations) — requires PostgreSQL
+- **Frontend**: 12 test files (95 tests) — self-contained, no server needed
+- **Test frameworks**: pytest + pytest-asyncio (backend), vitest + @testing-library/react (frontend)
+
+## Environment Variables
+Required: `DATABASE_URL`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_OAUTH_REDIRECT_URL`, `JWT_SECRET`, `PUBLIC_BASE_URL`
+Optional: `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`, `MAX_UPLOAD_MB`, `COOKIE_SECURE`, `SESSION_SECRET`, `DEV_MODE`, `JWT_EXPIRE_MINUTES`
+Compose-only: `SERVE_FRONTEND`, `WEB_PORT`, `NGINX_PORT`, `POSTGRES_PASSWORD`

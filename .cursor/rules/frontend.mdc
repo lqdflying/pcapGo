@@ -1,0 +1,76 @@
+---
+description: Frontend conventions for React/TypeScript code
+globs: frontend/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Frontend Development Rules
+
+## Stack
+React 18, TypeScript, Vite, Tailwind CSS, TanStack Query, TanStack Virtual, axios, Zustand, react-router-dom, lucide-react, react-resizable-panels.
+
+## Dev Server
+```bash
+cd frontend && npm install && npm run dev
+```
+Runs on `http://localhost:5173`, proxies `/api` and `/auth` to backend at `localhost:8000`.
+
+## Key Components
+- `Uploader` — drag-and-drop pcap file upload (accepts `.pcap`, `.pcapng`, `.cap`).
+- `PacketList` — virtualized packet list with protocol filter and pagination controls.
+- `PacketTree` — expandable protocol layer tree; clicking a layer highlights its bytes in `HexViewer`.
+- `HexViewer` — hex/ASCII dump of selected packet with highlighted layer byte ranges.
+- `StatsTabs` — protocol hierarchy, endpoints (Tx/Rx), conversations, IO graph (bucket/metric controls).
+- `AIAnalysisPanel` — per-conversation AI diagnostic summaries via SSE; LLM output is rendered as escaped text (no `dangerouslySetInnerHTML`).
+
+## Pages
+- `Login` — probes `/auth/me` on mount; GitHub OAuth redirect via `/auth/github/login`.
+- `Dashboard` — upload area + captures list with status polling and delete confirmation.
+- `Capture` — 3-pane inspector with view mode toggle (Packets / Statistics / AI Analysis), protocol dropdown, and pagination.
+
+## API Client
+- `frontend/src/api/client.ts` exports an axios instance (`baseURL: "/"`, `withCredentials: true`) and typed helpers for all backend endpoints.
+- The axios interceptor hard-redirects to `/login` on 401 unless already on `/login`.
+- Pages use TanStack Query for data fetching, caching, and invalidation.
+
+## State Management
+- `useAuthStore` (Zustand) holds the current `User | null` and `loading` state.
+- `useCaptureStore` (Zustand) holds the selected packet index and protocol filter.
+- `src/hooks/` exists as an empty directory; place future custom hooks there, not in `lib/`.
+
+## Auth Flow
+- GitHub OAuth: redirect to `/auth/github/login`, callback at `/auth/github/callback`.
+- JWT stored in `pcap_session` cookie (httpOnly, secure in production, SameSite=Lax).
+- `/auth/me` returns current user or 401.
+
+## Styling
+- Tailwind CSS with a dark theme defined in `tailwind.config.js`.
+- Color tokens are `panel-bg`, `panel-header`, `panel-border`, `panel-text`, `panel-muted`, `panel-accent`, `panel-success`, `panel-warning`, `panel-error`.
+- Default font is a monospace stack (`JetBrains Mono`, `Fira Code`).
+- Wireshark-style row colors are defined in `src/index.css` (`.tr-tcp`, `.tr-udp`, `.tr-icmp`, `.tr-selected`).
+
+## Build
+```bash
+cd frontend && npm run build
+```
+Output to `frontend/dist/`. Served by nginx in the test compose or by FastAPI `StaticFiles` in standalone mode.
+
+## Testing
+```bash
+cd frontend && npx vitest run              # Single run
+cd frontend && npx vitest                  # Watch mode
+cd frontend && npm run typecheck           # App TypeScript check
+cd frontend && npm run typecheck:test      # Test TypeScript check
+```
+
+Tests live in `frontend/src/__tests__/`, organized by `components/`, `pages/`, `api/`, and `lib/`. 12 test files cover:
+- **Components** (6): Uploader, PacketList, PacketTree, HexViewer, StatsTabs, AIAnalysisPanel
+- **Pages** (3): Login, Dashboard, Capture
+- **App router** (1): routing based on auth state
+- **Pure logic** (2): API client (axios), Zustand stores
+
+`vitest` config in `vite.config.ts` uses `jsdom`, `globals: true`, and `setupFiles: ["./src/test-setup.ts"]`.
+- `src/test-setup.ts` is a symlink to `src/__tests__/test-setup.ts`; edit the real file in `__tests__/`.
+- Source imports use the `@/` alias resolving to `frontend/src/`.
+- Test files are excluded from the app TypeScript build (`tsconfig.json` and `tsconfig.app.json` exclude `src/__tests__` and `src/test-setup.ts`).
+- `tsconfig.test.json` extends `tsconfig.app.json`, includes tests + setup, and adds `vitest/globals` and `@testing-library/jest-dom` types.

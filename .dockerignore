@@ -1,0 +1,53 @@
+# Root .dockerignore — applies to builds whose context is the repo root
+# (production Dockerfile, Dockerfile.nginx). The backend-only build uses
+# backend/ as its context, so see backend/.dockerignore for that.
+.git
+.gitignore
+.dockerignore
+.cursor/
+.github/
+
+# Python caches and virtualenvs
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# Node modules and build artifacts
+node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+
+# Vite cache
+.vite/
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Environment files (never bake secrets into images)
+.env
+.env.*
+!.env.sample
+
+# User uploads (must never enter an image)
+uploads/
+
+# Docker volumes
+pgdata/
+
+# Test artifacts
+tests/
+!tests/Dockerfile.nginx
+
+# Wiki (separate repo)
+wiki/
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

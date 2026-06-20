@@ -1,0 +1,25 @@
+# Backend-only .dockerignore — the tests/docker-compose.yml web service uses
+# backend/ as its build context (build: ../backend), so the root .dockerignore
+# does NOT apply here.
+
+# Python caches
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtualenvs (never bake these into the image)
+.venv/
+venv/
+
+# Pytest cache
+.pytest_cache/
+
+# Uploads (runtime data, not build input)
+uploads/
+
+# Editor / OS files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
