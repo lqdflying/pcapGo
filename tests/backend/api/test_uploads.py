@@ -68,12 +68,33 @@ class TestUploadPcap:
         response = await _upload(test_client_authenticated, filename="test.cap")
         assert response.status_code == 200
 
+    @pytest.mark.parametrize(
+        "filename",
+        ["capture.pcap0", "capture.pcap1", "dump.pcap-01", "x.cap2", "y.pcapng1"],
+    )
+    async def test_tcpdump_rotated_suffix_accepted(
+        self, test_client_authenticated, filename
+    ):
+        # tcpdump rotates capture files as capture.pcap0, capture.pcap1, ...
+        # These must be accepted; magic bytes remain the authoritative check.
+        response = await _upload(test_client_authenticated, filename=filename)
+        assert response.status_code == 200
+
     async def test_txt_rejected(self, test_client_authenticated):
         response = await _upload(test_client_authenticated, filename="notes.txt")
         assert response.status_code == 400
 
     async def test_no_extension_rejected(self, test_client_authenticated):
         response = await _upload(test_client_authenticated, filename="nofile")
+        assert response.status_code == 400
+
+    async def test_pcap_name_but_bad_magic_rejected(self, test_client_authenticated):
+        # A .pcap-named file whose content is not a pcap must still be rejected
+        # by the magic-byte check, proving the extension is only a guardrail.
+        bad = b"NOTPCAP!" + b"\x00" * 40
+        response = await _upload(
+            test_client_authenticated, filename="evil.pcap", content=bad
+        )
         assert response.status_code == 400
 
     async def test_file_too_large_rejected(self, test_client_authenticated, monkeypatch):
