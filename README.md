@@ -4,10 +4,20 @@ A self-hosted web application for uploading and analyzing network packet capture
 
 ## Features
 
-- **Upload & Parse** `.pcap`, `.pcapng`, `.cap` files (up to 100 MB)
+- **Upload & Parse** `.pcap`, `.pcapng`, `.cap` files — including tcpdump rotated
+  suffixes like `capture.pcap0`, `dump.pcap-01`, `x.cap2` (up to 100 MB). Files are
+  validated by pcap/pcapng **magic bytes**, not just the extension.
 - **Wireshark-style Inspector**: virtualized packet list, expandable protocol layer tree, hex/ASCII dump
-- **Statistics**: protocol hierarchy, endpoints, conversations, IO graph
-- **AI Analysis**: per-conversation diagnostic summaries and issue detection (retransmissions, connection resets, handshake failures, etc.)
+- **Find / Search**: case-insensitive search across source, destination, info and protocol
+- **Follow TCP/UDP Stream**: reconstruct a conversation's payload (ASCII/hex), client vs server
+- **Export**: download the current (filtered) packet list as CSV or JSON
+- **Statistics**: protocol hierarchy with percentages, sortable/filterable endpoints &
+  conversations, and an IO graph with tooltips — click an endpoint/conversation to filter the packet list
+- **AI Analysis**:
+  - **Chat** — ask free-form questions about a capture (scoped to packet/network analysis),
+    with persisted conversation threads and a **Stop** button to halt generation
+  - **Full analysis** — per-conversation diagnostic summaries and issue detection
+    (retransmissions, connection resets, handshake failures, etc.)
 - **GitHub OAuth** authentication (no self-hosted user management needed)
 - **Protocol Detection**: TCP, UDP, ICMP, HTTP, TLS, DNS, Redis, MySQL, PostgreSQL (detected by port)
 - **Dark theme** (Catppuccin-inspired)
@@ -207,7 +217,8 @@ Three containers from `tests/docker-compose.yml`: PostgreSQL, backend, and nginx
 2. Background task runs `scapy.PcapReader` (streaming, low memory) → writes `capture_id.jsonl` (one JSON record per packet) + `capture_id.index.json` (byte offset index for O(1) random access)
 3. Conversations are extracted (canonical 5-tuple grouping) and persisted to PostgreSQL
 4. Frontend queries packets via paginated API that reads the JSONL index, not re-parsing
-5. AI analysis iterates conversations, sends structured prompts to the LLM, streams results via SSE
+5. AI: full analysis iterates conversations and streams structured results via SSE; chat
+   persists threads/messages and streams token-by-token answers (stoppable mid-generation)
 
 ### Tech Stack
 
@@ -225,7 +236,7 @@ Three containers from `tests/docker-compose.yml`: PostgreSQL, backend, and nginx
 
 ## Testing
 
-### Backend Tests (~180 tests, pytest + asyncpg)
+### Backend Tests (250+ tests, pytest + asyncpg)
 ```bash
 # Requires PostgreSQL on localhost:5432 with pcap_test database
 cd backend && python -m pytest -v
@@ -233,12 +244,12 @@ cd backend && python -m pytest -v
 
 Tests live in `tests/backend/` (API integration, model CRUD, unit tests, migrations).
 
-### Frontend Tests (12 files, 95 tests, vitest + jsdom)
+### Frontend Tests (13 files, 110+ tests, vitest + jsdom)
 ```bash
 cd frontend && npx vitest run
 ```
 
-Tests live in `frontend/src/__tests__/` (6 component tests, 3 page tests, App router, API client, Zustand stores). No backend required.
+Tests live in `frontend/src/__tests__/` (component tests, page tests, App router, API client, Zustand stores). No backend required.
 
 ### Full Stack (Docker)
 ```bash
