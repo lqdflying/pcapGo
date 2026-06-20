@@ -12,7 +12,7 @@ A self-hosted web app for uploading and analyzing network packet captures (.pcap
 ```
 pcapGo/
 ├── Dockerfile                 # Root multi-stage build (frontend + backend, production)
-├── docker-compose.prod.yml    # SAMPLE: single-container prod compose (copy into a host deploy dir)
+├── docker-compose.yml         # SAMPLE: single-container prod compose (copy into a host deploy dir)
 ├── backend/                   # FastAPI (Python 3.12)
 │   ├── app/
 │   │   ├── api/               # Route handlers (auth, uploads, packets, statistics, analysis)
@@ -63,12 +63,12 @@ pcapGo/
 ## Deployment Modes
 | Mode | Compose File | Containers | Base Images |
 |------|-------------|-----------|-------------|
-| **Production (1Panel)** | `docker-compose.prod.yml` | 1 (web) | Internal Wolfi-based Node 24 + Python 3.12 images (`img.aksg.net/...`) |
+| **Production (1Panel)** | `docker-compose.yml` | 1 (web) | Pre-built image from Harbor (`img.aksg.net/pcapgo/pcapgo`) |
 | **Testing / Dev** | `tests/docker-compose.yml` | 3 (postgres + web + nginx) | `postgres:16-alpine`, internal Node/Python/nginx images |
 
-Production mode uses the root `Dockerfile`, which bundles the React SPA into the Python image. The backend serves the frontend via `StaticFiles` when `SERVE_FRONTEND=true`.
+Production mode pulls the pre-built Harbor image, which bundles the React SPA into the Python image. The backend serves the frontend via `StaticFiles` when `SERVE_FRONTEND=true`. The container joins 1Panel's existing `1panel-network` so it can reach 1Panel-managed PostgreSQL and the 1Panel reverse proxy.
 
-> **Sample vs. live deployment:** `docker-compose.prod.yml` and `.env.sample` in this repo are **sample templates**. The live deployment lives in a separate directory on the host (e.g. `~/pcapgo-deploy/`) holding copies named `docker-compose.yml` + `.env` with real secrets; the repo stays free of production secrets. The deploy compose builds from this repo's `Dockerfile` (point `build.context` at the repo, or pre-build an image).
+> **Sample vs. live deployment:** `docker-compose.yml` and `.env.sample` in this repo are **sample templates**. The live deployment lives in a separate directory on the host (e.g. `~/pcapgo-deploy/`) holding copies named `docker-compose.yml` + `.env` with real secrets; the repo stays free of production secrets. The deploy compose pulls the pre-built Harbor image by default; uncomment the `build:` block to build locally from this repo instead.
 
 > **Image publishing:** building, tagging (`img.aksg.net/pcapgo/pcapgo:<version>` + `:latest`), pushing to Harbor, key-based cosign signing, and Trivy vulnerability scanning / CVE allowlisting are all documented in `release.mdc`. Versions are git-tag-driven (`v0.0.1` → GitHub tag + Harbor `0.0.1` + `latest`). Always build with `--pull` so base images are refreshed to latest on every build.
 
@@ -91,9 +91,9 @@ Production mode uses the root `Dockerfile`, which bundles the React SPA into the
 ## How to Run
 ```bash
 # Production (1Panel) — single container, from a host deploy dir.
-# Samples (docker-compose.prod.yml, .env.sample) are copied from this repo into
-# the deploy dir as docker-compose.yml + .env; build.context points back here.
-cd ~/pcapgo-deploy && docker compose up -d --build
+# Samples (docker-compose.yml, .env.sample) are copied from this repo into
+# the deploy dir as docker-compose.yml + .env.
+cd ~/pcapgo-deploy && docker compose up -d
 
 # Testing / Dev — full 3-container stack
 docker compose -f tests/docker-compose.yml up -d

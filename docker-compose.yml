@@ -7,15 +7,13 @@
 #   1. Clone/update this repo to get the latest samples + Dockerfile.
 #   2. Create a deployment directory elsewhere on the host, e.g. ~/pcapgo-deploy.
 #   3. Copy the samples in:
-#        cp docker-compose.prod.yml ~/pcapgo-deploy/docker-compose.yml
-#        cp .env.sample             ~/pcapgo-deploy/.env
-#   4. In ~/pcapgo-deploy/docker-compose.yml, point build.context at this repo
-#      (or pre-build an image and switch the service to `image:`).
-#   5. Fill ~/pcapgo-deploy/.env with real values (secrets, DB, domain).
-#   6. cd ~/pcapgo-deploy && docker compose up -d --build
+#        cp docker-compose.yml ~/pcapgo-deploy/docker-compose.yml
+#        cp .env.sample        ~/pcapgo-deploy/.env
+#   4. Fill ~/pcapgo-deploy/.env with real values (secrets, DB, domain).
+#   5. cd ~/pcapgo-deploy && docker compose up -d
 #
-# 1Panel alternative: paste this file's contents + your .env into 1Panel's
-# Compose editor (see the 1Panel section of the Deployment guide).
+# 1Panel: this compose attaches to the existing 1panel-network so the container
+# can reach 1Panel-managed PostgreSQL and the 1Panel reverse proxy.
 # =============================================================================
 # All container configuration is injected from .env via the env_file directive
 # — there are no per-variable environment entries or hardcoded defaults here.
@@ -24,15 +22,22 @@
 # Compose fails fast with a clear error.
 services:
   web:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: img.aksg.net/pcapgo/pcapgo:latest
+    pull_policy: always
+    # If you prefer to build locally from this repo instead of using the
+    # published Harbor image, comment out `image:` above and uncomment:
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
     restart: unless-stopped
     env_file: .env
     ports:
       - "${WEB_PORT}:8000"
     volumes:
-      - uploads:/app/uploads
+      - ./uploads:/app/uploads
+    networks:
+      - 1panel-network
 
-volumes:
-  uploads:
+networks:
+  1panel-network:
+    external: true
