@@ -131,20 +131,20 @@ describe("CapturePage", () => {
       renderCapturePage();
     });
     await screen.findByText("test.pcap");
-    const toggleBtn = screen.getByTitle("Open Capture Command panel");
+    const toggleBtn = screen.getByTitle("Open AI Tools panel");
     expect(toggleBtn).toBeInTheDocument();
   });
 
-  it("clicking terminal icon toggles capture command panel", async () => {
+  it("clicking terminal icon toggles AI Tools panel", async () => {
     await act(async () => {
       renderCapturePage();
     });
     await screen.findByText("test.pcap");
-    const toggleBtn = screen.getByTitle("Open Capture Command panel");
+    const toggleBtn = screen.getByTitle("Open AI Tools panel");
     await act(async () => {
       fireEvent.click(toggleBtn);
     });
-    expect(screen.getByText("Capture Command")).toBeInTheDocument();
+    expect(screen.getByText("AI Tools")).toBeInTheDocument();
   });
 
   it("surfaces the backend error when Explain fails (e.g. LLM not configured)", async () => {

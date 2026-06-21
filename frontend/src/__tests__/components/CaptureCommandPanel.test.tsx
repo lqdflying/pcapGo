@@ -45,10 +45,11 @@ describe("CaptureCommandPanel", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders mode toggle with Builder and AI Generate tabs", () => {
+  it("renders mode toggle with Builder, AI Generate, and Chat tabs", () => {
     render(<CaptureCommandPanel />);
     expect(screen.getByText("Builder")).toBeInTheDocument();
     expect(screen.getByText("AI Generate")).toBeInTheDocument();
+    expect(screen.getByText("Chat")).toBeInTheDocument();
   });
 
   it("defaults to Builder mode — shows builder component", () => {
@@ -81,6 +82,27 @@ describe("CaptureCommandPanel", () => {
     fireEvent.click(screen.getByText("AI Generate"));
     expect(screen.queryByText("Generated Command")).not.toBeInTheDocument();
     expect(screen.queryByText("Copy")).not.toBeInTheDocument();
+  });
+
+  it("clicking Chat tab hides command preview", () => {
+    render(<CaptureCommandPanel captureId="cap-1" />);
+    expect(screen.getByText("Generated Command")).toBeInTheDocument();
+    expect(screen.getByText("tcpdump -i any")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Chat"));
+
+    expect(screen.getByLabelText("Ask about packets")).toBeInTheDocument();
+    expect(screen.queryByText("Generated Command")).not.toBeInTheDocument();
+    expect(screen.queryByText("tcpdump -i any")).not.toBeInTheDocument();
+  });
+
+  it("shows a no-capture fallback when Chat is selected without a capture", () => {
+    render(<CaptureCommandPanel />);
+
+    fireEvent.click(screen.getByText("Chat"));
+
+    expect(screen.getByText("Open a capture to use chat.")).toBeInTheDocument();
+    expect(screen.queryByText("Generated Command")).not.toBeInTheDocument();
   });
 
   it("when builder sets a command, the command preview area appears with the command text", () => {

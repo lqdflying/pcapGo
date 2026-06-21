@@ -16,6 +16,7 @@ export function AIChatPanel({ captureId }: Props) {
   const [streamingText, setStreamingText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const requestSeqRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = useCallback(() => {
@@ -23,6 +24,25 @@ export function AIChatPanel({ captureId }: Props) {
   }, []);
 
   useEffect(scrollToBottom, [messages, streamingText, scrollToBottom]);
+
+  useEffect(() => {
+    requestSeqRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setThreadId(null);
+    setMessages([]);
+    setInput("");
+    setStreaming(false);
+    setStreamingText("");
+    setError(null);
+  }, [captureId]);
+
+  useEffect(() => {
+    return () => {
+      requestSeqRef.current += 1;
+      abortRef.current?.abort();
+    };
+  }, []);
 
   const sendMessage = useCallback(async () => {
     const text = input.trim();
@@ -42,7 +62,10 @@ export function AIChatPanel({ captureId }: Props) {
 
     const controller = new AbortController();
     abortRef.current = controller;
+    const requestSeq = requestSeqRef.current + 1;
+    requestSeqRef.current = requestSeq;
     let acc = "";
+    let errorSet = false;
 
     try {
       let tid = threadId;
@@ -57,19 +80,23 @@ export function AIChatPanel({ captureId }: Props) {
         signal: controller.signal,
         packetIndices: selectedIndices.length > 0 ? selectedIndices : undefined,
         onDelta: (delta) => {
+          if (requestSeq !== requestSeqRef.current) return;
           acc += delta;
           setStreamingText(acc);
         },
         onError: (msg) => {
+          if (requestSeq !== requestSeqRef.current) return;
           setError(msg);
+          errorSet = true;
           controller.abort();
         },
       });
     } catch {
-      if (acc === "" && !error) {
+      if (requestSeq === requestSeqRef.current && acc === "" && !errorSet) {
         setError("Chat request failed.");
       }
     } finally {
+      if (requestSeq !== requestSeqRef.current) return;
       setStreaming(false);
       abortRef.current = null;
       if (acc) {
@@ -81,9 +108,11 @@ export function AIChatPanel({ captureId }: Props) {
         };
         setMessages((prev) => [...prev, assistantMsg]);
         setStreamingText("");
+      } else {
+        setStreamingText("");
       }
     }
-  }, [input, streaming, threadId, captureId, selectedIndices, error]);
+  }, [input, streaming, threadId, captureId, selectedIndices]);
 
   const stop = () => {
     abortRef.current?.abort();
