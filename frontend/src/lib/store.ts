@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import i18n from "i18next";
 import type { User } from "../api/client";
 
 // ── Theme ──────────────────────────────────────────────────────────────
@@ -28,6 +29,28 @@ export const useThemeStore = create<ThemeState>((set) => ({
   setTheme: (t) => {
     applyTheme(t);
     set({ theme: t });
+  },
+}));
+
+// ── Language ───────────────────────────────────────────────────────────
+
+export type Language = "en" | "zh";
+
+interface LanguageState {
+  language: Language;
+  setLanguage: (l: Language) => void;
+}
+
+const storedLanguage = (typeof window !== "undefined"
+  ? (localStorage.getItem("pcapgo-language") as Language | null)
+  : null) ?? "en";
+
+export const useLanguageStore = create<LanguageState>((set) => ({
+  language: storedLanguage,
+  setLanguage: (l) => {
+    localStorage.setItem("pcapgo-language", l);
+    i18n.changeLanguage(l);
+    set({ language: l });
   },
 }));
 

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import {
   getUser,
   listCaptures,
@@ -27,19 +28,27 @@ import {
   Eye,
   EyeOff,
   User as UserIcon,
+  Languages,
 } from "lucide-react";
-import { useThemeStore, type Theme } from "../lib/store";
+import { useThemeStore, useLanguageStore, type Theme, type Language } from "../lib/store";
 import { CaptureCommandPanel } from "../components/CaptureCommandPanel";
 
 const THEMES: { value: Theme; label: string }[] = [
-  { value: "dark", label: "Dark" },
-  { value: "light", label: "Light" },
-  { value: "obsidian", label: "Obsidian" },
+  { value: "dark", label: "dark" },
+  { value: "light", label: "light" },
+  { value: "obsidian", label: "obsidian" },
+];
+
+const LANGUAGES: { value: Language; label: string }[] = [
+  { value: "en", label: "English" },
+  { value: "zh", label: "中文" },
 ];
 
 export function DashboardPage() {
+  const { t } = useTranslation();
   const { user, setUser } = useAuthStore();
   const { theme, setTheme } = useThemeStore();
+  const { language, setLanguage } = useLanguageStore();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [uploading, setUploading] = useState(false);
@@ -116,6 +125,8 @@ export function DashboardPage() {
     return `${(b / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  const themeLabel = (v: string) => t(`common.${v}`) as string;
+
   return (
     <div className="flex h-full flex-col bg-panel-bg">
       {/* Header */}
@@ -128,7 +139,7 @@ export function DashboardPage() {
           />
           <div>
             <h1 className="text-lg font-semibold text-panel-text">pcapGo</h1>
-            <p className="text-xs text-panel-muted">Packet Capture Inspector</p>
+            <p className="text-xs text-panel-muted">{t("dashboard.packetCaptureInspector")}</p>
           </div>
         </div>
         <div className="flex items-center gap-4">
@@ -148,35 +159,48 @@ export function DashboardPage() {
             <button
               onClick={() => navigate("/admin")}
               className="inline-flex items-center gap-1.5 rounded-lg border border-panel-accent/30 px-3 py-1.5 text-xs font-medium text-panel-accent transition hover:bg-panel-accent/10"
-              title="User Management"
+              title={t("dashboard.userManagement")}
             >
-              <Shield className="h-3.5 w-3.5" /> Admin
+              <Shield className="h-3.5 w-3.5" /> {t("common.admin")}
             </button>
           )}
           <button
             onClick={() => setShowCaptureCommand(true)}
             className="inline-flex items-center gap-1.5 rounded-lg border border-panel-border px-3 py-1.5 text-xs font-medium text-panel-muted transition hover:bg-panel-border hover:text-panel-text"
-            title="Capture Command Generator"
+            title={t("dashboard.captureCommandGenerator")}
           >
-            <Terminal className="h-3.5 w-3.5" /> Capture Command
+            <Terminal className="h-3.5 w-3.5" /> {t("dashboard.captureCommand")}
           </button>
+          <div className="flex items-center gap-1 rounded-lg border border-panel-border px-1">
+            <Languages className="h-3.5 w-3.5 text-panel-muted" />
+            <select
+              aria-label={t("common.language")}
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as Language)}
+              className="bg-transparent py-1 pr-1 text-xs text-panel-text focus:outline-none"
+            >
+              {LANGUAGES.map((l) => (
+                <option key={l.value} value={l.value}>{l.label}</option>
+              ))}
+            </select>
+          </div>
           <div className="flex items-center gap-1 rounded-lg border border-panel-border px-1">
             <Palette className="h-3.5 w-3.5 text-panel-muted" />
             <select
-              aria-label="Theme"
+              aria-label={t("common.theme")}
               value={theme}
               onChange={(e) => setTheme(e.target.value as Theme)}
               className="bg-transparent py-1 pr-1 text-xs text-panel-text focus:outline-none"
             >
-              {THEMES.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
+              {THEMES.map((th) => (
+                <option key={th.value} value={th.value}>{themeLabel(th.label)}</option>
               ))}
             </select>
           </div>
           <button
             onClick={handleLogout}
             className="rounded-lg p-2 text-panel-muted transition hover:bg-panel-border hover:text-panel-text"
-            title="Logout"
+            title={t("common.logout")}
           >
             <LogOut className="h-4 w-4" />
           </button>
@@ -192,7 +216,7 @@ export function DashboardPage() {
       <main className="flex-1 overflow-auto px-6 py-4">
         <div className="mb-4 flex items-center gap-3">
           <h2 className="text-sm font-medium text-panel-muted">
-            {isAdmin && showAll ? "All Captures" : "Your Captures"}
+            {isAdmin && showAll ? t("dashboard.allCaptures") : t("dashboard.yourCaptures")}
           </h2>
           {isAdmin && (
             <>
@@ -206,14 +230,14 @@ export function DashboardPage() {
                     ? "bg-panel-accent/10 text-panel-accent"
                     : "text-panel-muted hover:text-panel-text"
                 }`}
-                title={showAll ? "Show my captures" : "Show all captures"}
+                title={showAll ? t("dashboard.showMyCaptures") : t("dashboard.showAllCaptures")}
               >
                 {showAll ? (
                   <Eye className="h-3.5 w-3.5" />
                 ) : (
                   <EyeOff className="h-3.5 w-3.5" />
                 )}
-                {showAll ? "All Users" : "Mine Only"}
+                {showAll ? t("dashboard.allUsers") : t("dashboard.mineOnly")}
               </button>
               {showAll && (
                 <div className="flex items-center gap-1">
@@ -222,7 +246,7 @@ export function DashboardPage() {
                     type="text"
                     value={ownerFilter}
                     onChange={(e) => setOwnerFilter(e.target.value)}
-                    placeholder="Filter by username..."
+                    placeholder={t("dashboard.filterByUsername")}
                     className="rounded border border-panel-border bg-panel-bg px-2 py-1 text-xs text-panel-text placeholder-panel-muted/50 focus:border-panel-accent focus:outline-none"
                   />
                 </div>
@@ -231,10 +255,10 @@ export function DashboardPage() {
           )}
         </div>
         {isLoading ? (
-          <p className="text-sm text-panel-muted">Loading...</p>
+          <p className="text-sm text-panel-muted">{t("common.loading")}</p>
         ) : !data?.captures?.length ? (
           <p className="text-sm text-panel-muted">
-            No captures yet. Upload a .pcap file above.
+            {t("dashboard.noCaptures")}
           </p>
         ) : (
           <div className="space-y-2">
@@ -250,7 +274,7 @@ export function DashboardPage() {
                       {cap.filename}
                     </p>
                     <p className="text-xs text-panel-muted">
-                      {formatBytes(cap.size_bytes)} · {cap.packet_count} packets ·{" "}
+                      {formatBytes(cap.size_bytes)} · {t("dashboard.packetCount", { count: cap.packet_count })} ·{" "}
                       {new Date(cap.created_at).toLocaleString()}
                       {isAdmin && showAll && cap.owner_login && (
                         <span className="ml-1 text-panel-accent">
@@ -267,22 +291,22 @@ export function DashboardPage() {
                       onClick={() => navigate(`/captures/${cap.id}`)}
                       className="rounded-lg px-4 py-1.5 text-sm font-medium text-panel-accent transition hover:bg-panel-accent/10"
                     >
-                      Analyze <ChevronRight className="ml-1 inline h-3 w-3" />
+                      {t("dashboard.analyze")} <ChevronRight className="ml-1 inline h-3 w-3" />
                     </button>
                   )}
                   <button
                     onClick={() => {
                       if (
                         window.confirm(
-                          `Delete "${cap.filename}"? This cannot be undone.`
+                          t("dashboard.deleteConfirm", { filename: cap.filename })
                         )
                       ) {
                         deleteMut.mutate(cap.id);
                       }
                     }}
                     className="rounded-lg p-1.5 text-panel-muted transition hover:bg-panel-error/10 hover:text-panel-error"
-                    title="Delete"
-                    aria-label="Delete capture"
+                    title={t("common.delete")}
+                    aria-label={t("dashboard.deleteCapture")}
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -298,10 +322,10 @@ export function DashboardPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="relative flex h-[80vh] w-[600px] max-w-[90vw] flex-col overflow-hidden rounded-xl border border-panel-border bg-panel-bg shadow-2xl">
             <div className="flex items-center justify-between border-b border-panel-border bg-panel-header px-4 py-2">
-              <span className="text-sm font-medium text-panel-text">Capture Command Generator</span>
+              <span className="text-sm font-medium text-panel-text">{t("dashboard.captureCommandGenerator")}</span>
               <button
                 onClick={() => setShowCaptureCommand(false)}
-                aria-label="Close capture command"
+                aria-label={t("common.close")}
                 className="rounded p-1 text-panel-muted hover:bg-panel-border hover:text-panel-text"
               >
                 <X className="h-4 w-4" />

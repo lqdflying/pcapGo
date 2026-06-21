@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2, Send, Square, Trash2 } from "lucide-react";
 import { createChatThread, streamChatMessage, type ChatMessage } from "../api/client";
 import { useCaptureStore } from "../lib/store";
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export function AIChatPanel({ captureId }: Props) {
+  const { t } = useTranslation();
   const { selectedIndices } = useCaptureStore();
   const [threadId, setThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -93,7 +95,7 @@ export function AIChatPanel({ captureId }: Props) {
       });
     } catch {
       if (requestSeq === requestSeqRef.current && acc === "" && !errorSet) {
-        setError("Chat request failed.");
+        setError(t("chat.chatFailed"));
       }
     } finally {
       if (requestSeq !== requestSeqRef.current) return;
@@ -132,13 +134,12 @@ export function AIChatPanel({ captureId }: Props) {
         {messages.length === 0 && !streaming && (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <p className="text-xs text-panel-muted">
-              Ask questions about{" "}
               {selectedIndices.length > 0
-                ? `${selectedIndices.length} selected packet${selectedIndices.length > 1 ? "s" : ""}`
-                : "your capture"}
+                ? t("chat.askAboutSelected", { count: selectedIndices.length })
+                : t("chat.askAboutCapture")}
             </p>
             <p className="mt-1 text-[11px] text-panel-muted/60">
-              e.g. &quot;What protocols are in use?&quot; or &quot;Is there anything suspicious?&quot;
+              e.g. &quot;{t("chat.exampleProtocols")}&quot; or &quot;{t("chat.exampleSuspicious")}&quot;
             </p>
           </div>
         )}
@@ -170,7 +171,7 @@ export function AIChatPanel({ captureId }: Props) {
 
         {streaming && !streamingText && (
           <div className="flex items-center gap-2 text-xs text-panel-muted">
-            <Loader2 className="h-3 w-3 animate-spin" /> Thinking...
+            <Loader2 className="h-3 w-3 animate-spin" /> {t("chat.thinking")}
           </div>
         )}
 
@@ -183,7 +184,7 @@ export function AIChatPanel({ captureId }: Props) {
       {selectedIndices.length > 0 && (
         <div className="border-t border-panel-border bg-panel-accent/5 px-3 py-1">
           <span className="text-[11px] text-panel-accent">
-            {selectedIndices.length} packet{selectedIndices.length > 1 ? "s" : ""} selected as context
+            {t("chat.selectedAsContext", { count: selectedIndices.length })}
           </span>
         </div>
       )}
@@ -202,14 +203,14 @@ export function AIChatPanel({ captureId }: Props) {
               }
             }}
             rows={2}
-            placeholder="Ask about the selected packets..."
+            placeholder={t("chat.askPlaceholder")}
             className="flex-1 resize-none rounded border border-panel-border bg-panel-bg px-2 py-1.5 text-xs text-panel-text focus:border-panel-accent focus:outline-none"
           />
           <div className="flex flex-col gap-1">
             {streaming ? (
               <button
                 onClick={stop}
-                aria-label="Stop"
+                aria-label={t("common.stop")}
                 className="rounded-lg bg-panel-error/20 p-1.5 text-panel-error hover:bg-panel-error/30"
               >
                 <Square className="h-3.5 w-3.5" />
@@ -218,7 +219,7 @@ export function AIChatPanel({ captureId }: Props) {
               <button
                 onClick={sendMessage}
                 disabled={!input.trim()}
-                aria-label="Send"
+                aria-label={t("common.send")}
                 className="rounded-lg bg-panel-accent p-1.5 text-panel-header transition hover:bg-panel-accent/80 disabled:opacity-40"
               >
                 <Send className="h-3.5 w-3.5" />
@@ -227,8 +228,8 @@ export function AIChatPanel({ captureId }: Props) {
             {messages.length > 0 && !streaming && (
               <button
                 onClick={clearChat}
-                aria-label="New chat"
-                title="New chat"
+                aria-label={t("chat.newChat")}
+                title={t("chat.newChat")}
                 className="rounded-lg p-1.5 text-panel-muted hover:bg-panel-border hover:text-panel-text"
               >
                 <Trash2 className="h-3.5 w-3.5" />

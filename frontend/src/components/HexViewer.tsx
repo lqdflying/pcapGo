@@ -1,4 +1,5 @@
 import { useRef, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 import type { PacketDetail } from "../api/client";
 
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export function HexViewer({ detail, loading, highlight }: Props) {
+  const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -41,7 +43,7 @@ export function HexViewer({ detail, loading, highlight }: Props) {
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-panel-border bg-panel-header px-3 py-1.5 text-xs font-medium text-panel-muted">
-        Hex Dump
+        {t("hexViewer.hexDump")}
       </div>
       <div ref={scrollRef} className="flex-1 overflow-auto font-mono">
         {loading ? (
@@ -93,7 +95,7 @@ export function HexViewer({ detail, loading, highlight }: Props) {
           </table>
         ) : (
           <p className="p-4 text-xs text-panel-muted">
-            Select a packet to view hex dump
+            {t("hexViewer.selectPacket")}
           </p>
         )}
       </div>

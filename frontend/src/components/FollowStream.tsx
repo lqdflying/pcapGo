@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { X, Loader2 } from "lucide-react";
 import { getFollowStream, type ConversationStats } from "../api/client";
@@ -34,6 +35,7 @@ function toHex(bytes: Uint8Array): string {
 }
 
 export function FollowStream({ captureId, conversation, onClose }: Props) {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<ViewMode>("ascii");
 
   const { data, isLoading, error } = useQuery({
@@ -64,7 +66,7 @@ export function FollowStream({ captureId, conversation, onClose }: Props) {
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
       role="dialog"
-      aria-label="Follow stream"
+      aria-label={t("followStream.title")}
       onClick={onClose}
     >
       <div
@@ -72,7 +74,7 @@ export function FollowStream({ captureId, conversation, onClose }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 border-b border-panel-border bg-panel-header px-4 py-2">
-          <span className="text-sm font-medium text-panel-text">Follow Stream</span>
+          <span className="text-sm font-medium text-panel-text">{t("followStream.title")}</span>
           <span className="text-xs text-panel-muted">
             {conversation.proto.toUpperCase()} · {conversation.src_ip}:
             {conversation.src_port} ↔ {conversation.dst_ip}:{conversation.dst_port}
@@ -95,7 +97,7 @@ export function FollowStream({ captureId, conversation, onClose }: Props) {
             </div>
             <button
               onClick={onClose}
-              aria-label="Close"
+              aria-label={t("common.close")}
               className="rounded p-1 text-panel-muted hover:bg-panel-border hover:text-panel-text"
             >
               <X className="h-4 w-4" />
@@ -109,9 +111,9 @@ export function FollowStream({ captureId, conversation, onClose }: Props) {
               <Loader2 className="h-6 w-6 animate-spin text-panel-accent" />
             </div>
           ) : error ? (
-            <p className="text-panel-error">Failed to load stream.</p>
+            <p className="text-panel-error">{t("followStream.failedToLoad")}</p>
           ) : !data || data.segments.length === 0 ? (
-            <p className="text-panel-muted">No payload data in this conversation.</p>
+            <p className="text-panel-muted">{t("followStream.noPayload")}</p>
           ) : (
             <>
               {rendered.map((seg) => (
@@ -128,7 +130,7 @@ export function FollowStream({ captureId, conversation, onClose }: Props) {
               ))}
               {data.truncated && (
                 <p className="mt-2 text-[11px] text-panel-warning">
-                  Stream truncated at the size limit.
+                  {t("followStream.truncated")}
                 </p>
               )}
             </>
@@ -136,11 +138,11 @@ export function FollowStream({ captureId, conversation, onClose }: Props) {
         </div>
 
         <div className="border-t border-panel-border bg-panel-header px-4 py-1.5 text-[11px] text-panel-muted">
-          <span className="text-panel-accent">■</span> client ·{" "}
-          <span className="text-panel-success">■</span> server
+          <span className="text-panel-accent">■</span> {t("followStream.client")} ·{" "}
+          <span className="text-panel-success">■</span> {t("followStream.server")}
           {data && (
             <span className="ml-3">
-              {data.client_bytes} B sent · {data.server_bytes} B received
+              {t("followStream.bytesSent", { bytes: data.client_bytes })} · {t("followStream.bytesReceived", { bytes: data.server_bytes })}
             </span>
           )}
         </div>

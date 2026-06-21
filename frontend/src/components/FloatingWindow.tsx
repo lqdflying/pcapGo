@@ -1,4 +1,5 @@
 import { useRef, useCallback, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { PanelRight, X } from "lucide-react";
 
 interface Geom {
@@ -21,6 +22,7 @@ const MIN_W = 320;
 const MIN_H = 240;
 
 export function FloatingWindow({ geom, onChange, onDock, onClose, title = "AI Tools", children }: Props) {
+  const { t } = useTranslation();
   const dragOrigin = useRef<{ sx: number; sy: number; gx: number; gy: number } | null>(null);
   const resizeOrigin = useRef<{ sx: number; sy: number; gw: number; gh: number } | null>(null);
 
@@ -104,7 +106,7 @@ export function FloatingWindow({ geom, onChange, onDock, onClose, title = "AI To
           <button
             onPointerDown={(e) => e.stopPropagation()}
             onClick={onDock}
-            title="Dock panel"
+            title={t("capture.dockPanel")}
             className="rounded p-1 text-panel-muted hover:bg-panel-border hover:text-panel-text"
           >
             <PanelRight className="h-3.5 w-3.5" />
@@ -112,7 +114,7 @@ export function FloatingWindow({ geom, onChange, onDock, onClose, title = "AI To
           <button
             onPointerDown={(e) => e.stopPropagation()}
             onClick={onClose}
-            title="Close"
+            title={t("common.close")}
             className="rounded p-1 text-panel-muted hover:bg-panel-error/20 hover:text-panel-error"
           >
             <X className="h-3.5 w-3.5" />
