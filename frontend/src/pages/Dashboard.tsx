@@ -21,8 +21,11 @@ import {
   LogOut,
   ChevronRight,
   Palette,
+  Terminal,
+  X,
 } from "lucide-react";
 import { useThemeStore, type Theme } from "../lib/store";
+import { CaptureCommandPanel } from "../components/CaptureCommandPanel";
 
 const THEMES: { value: Theme; label: string }[] = [
   { value: "dark", label: "Dark" },
@@ -36,6 +39,7 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [uploading, setUploading] = useState(false);
+  const [showCaptureCommand, setShowCaptureCommand] = useState(false);
 
   useEffect(() => {
     getUser()
@@ -120,6 +124,13 @@ export function DashboardPage() {
               <span>{user.login}</span>
             </div>
           )}
+          <button
+            onClick={() => setShowCaptureCommand(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-panel-border px-3 py-1.5 text-xs font-medium text-panel-muted transition hover:bg-panel-border hover:text-panel-text"
+            title="Capture Command Generator"
+          >
+            <Terminal className="h-3.5 w-3.5" /> Capture Command
+          </button>
           <div className="flex items-center gap-1 rounded-lg border border-panel-border px-1">
             <Palette className="h-3.5 w-3.5 text-panel-muted" />
             <select
@@ -210,6 +221,27 @@ export function DashboardPage() {
           </div>
         )}
       </main>
+
+      {/* Capture Command modal */}
+      {showCaptureCommand && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="relative flex h-[80vh] w-[600px] max-w-[90vw] flex-col overflow-hidden rounded-xl border border-panel-border bg-panel-bg shadow-2xl">
+            <div className="flex items-center justify-between border-b border-panel-border bg-panel-header px-4 py-2">
+              <span className="text-sm font-medium text-panel-text">Capture Command Generator</span>
+              <button
+                onClick={() => setShowCaptureCommand(false)}
+                aria-label="Close capture command"
+                className="rounded p-1 text-panel-muted hover:bg-panel-border hover:text-panel-text"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <CaptureCommandPanel />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

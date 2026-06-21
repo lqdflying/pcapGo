@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
@@ -10,15 +10,19 @@ import {
   Search,
   Download,
   Palette,
-  Sparkles,
+  Terminal,
   PanelRightOpen,
   PanelRightClose,
+  Sparkles,
+  Square,
+  X,
 } from "lucide-react";
 import {
   getPackets,
   getPacketDetail,
   getStatistics,
   packetsExportUrl,
+  streamExplainPackets,
   type Capture,
   type PacketSummary,
   type PacketDetail,
@@ -30,7 +34,7 @@ import { PacketList } from "../components/PacketList";
 import { PacketTree } from "../components/PacketTree";
 import { HexViewer } from "../components/HexViewer";
 import { StatsTabs } from "../components/StatsTabs";
-import { AIAnalysisPanel } from "../components/AIAnalysisPanel";
+import { CaptureCommandPanel } from "../components/CaptureCommandPanel";
 import { FloatingWindow } from "../components/FloatingWindow";
 import { FollowStream } from "../components/FollowStream";
 
@@ -80,6 +84,9 @@ export function CapturePage() {
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   const [followConv, setFollowConv] = useState<ConversationStats | null>(null);
+  const [explainText, setExplainText] = useState("");
+  const [explainStreaming, setExplainStreaming] = useState(false);
+  const explainAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setAppliedSearch(search), 300);
@@ -151,11 +158,41 @@ export function CapturePage() {
     setIoMetric(metric);
   };
 
-  const aiPanel = id ? (
-    <AIAnalysisPanel
-      captureId={id}
-      selectedIndices={selectedIndices}
-    />
+  const explainSelected = useCallback(async () => {
+    if (!selectedIndices.length || explainStreaming || !id) return;
+    setExplainText("");
+    setExplainStreaming(true);
+    const controller = new AbortController();
+    explainAbortRef.current = controller;
+    let acc = "";
+    try {
+      await streamExplainPackets(id, selectedIndices, {
+        signal: controller.signal,
+        onDelta: (text) => {
+          acc += text;
+          setExplainText(acc);
+        },
+      });
+    } catch {
+      // aborted or network error
+    } finally {
+      setExplainStreaming(false);
+      explainAbortRef.current = null;
+    }
+  }, [id, selectedIndices, explainStreaming]);
+
+  const stopExplain = () => {
+    explainAbortRef.current?.abort();
+  };
+
+  const dismissExplain = () => {
+    setExplainText("");
+    setExplainStreaming(false);
+    explainAbortRef.current?.abort();
+  };
+
+  const captureCommandPanel = id ? (
+    <CaptureCommandPanel captureId={id} />
   ) : null;
 
   return (
@@ -197,24 +234,24 @@ export function CapturePage() {
             ))}
           </div>
 
-          {/* AI dock toggle */}
+          {/* Capture Command dock toggle */}
           {viewMode === "packets" && (
             <>
               <button
                 onClick={() => setAiDockOpen(!aiDockOpen)}
-                title={aiDockOpen ? "Close AI panel" : "Open AI panel"}
+                title={aiDockOpen ? "Close Capture Command panel" : "Open Capture Command panel"}
                 className={`rounded-lg p-1.5 transition ${
                   aiDockOpen
                     ? "bg-panel-accent/20 text-panel-accent"
                     : "text-panel-muted hover:bg-panel-border hover:text-panel-text"
                 }`}
               >
-                <Sparkles className="h-4 w-4" />
+                <Terminal className="h-4 w-4" />
               </button>
               {aiDockOpen && (
                 <button
                   onClick={toggleAiPopOut}
-                  title={aiPoppedOut ? "Dock AI panel" : "Pop out AI panel"}
+                  title={aiPoppedOut ? "Dock panel" : "Pop out panel"}
                   className="rounded-lg p-1.5 text-panel-muted transition hover:bg-panel-border hover:text-panel-text"
                 >
                   {aiPoppedOut ? (
@@ -307,6 +344,57 @@ export function CapturePage() {
                         onSelect={selectPacket}
                         loading={packetsQuery.isLoading}
                       />
+                      {/* Selection actions: explain */}
+                      {selectedIndices.length > 0 && (
+                        <div className="flex items-center gap-2 border-t border-panel-border bg-panel-header/40 px-3 py-1.5">
+                          <span className="text-[11px] text-panel-muted">
+                            {selectedIndices.length} packet{selectedIndices.length > 1 ? "s" : ""} selected
+                          </span>
+                          {explainStreaming ? (
+                            <button
+                              onClick={stopExplain}
+                              aria-label="Stop explain"
+                              className="inline-flex items-center gap-1 rounded bg-panel-error/20 px-2 py-0.5 text-[11px] font-medium text-panel-error hover:bg-panel-error/30"
+                            >
+                              <Square className="h-3 w-3" /> Stop
+                            </button>
+                          ) : (
+                            <button
+                              onClick={explainSelected}
+                              aria-label="Explain selected packets"
+                              className="inline-flex items-center gap-1 rounded bg-panel-accent/20 px-2 py-0.5 text-[11px] font-medium text-panel-accent hover:bg-panel-accent/30"
+                            >
+                              <Sparkles className="h-3 w-3" /> Explain
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      {/* Explain result */}
+                      {(explainText || explainStreaming) && (
+                        <div className="border-t border-panel-border bg-panel-header/40 px-3 py-2">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[11px] font-medium text-panel-muted">Packet Explanation</span>
+                            <button
+                              onClick={dismissExplain}
+                              aria-label="Dismiss explanation"
+                              className="rounded p-0.5 text-panel-muted hover:bg-panel-border hover:text-panel-text"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                          <div className="max-h-40 overflow-auto rounded border border-panel-border bg-panel-bg px-3 py-2">
+                            {explainText ? (
+                              <p className="whitespace-pre-wrap text-xs leading-relaxed text-panel-text">
+                                {explainText}
+                              </p>
+                            ) : (
+                              <div className="flex items-center gap-2 text-xs text-panel-muted">
+                                <Loader2 className="h-3 w-3 animate-spin" /> Generating explanation...
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                       {/* Pagination controls */}
                       <div className="flex items-center justify-between border-t border-panel-border bg-panel-header px-3 py-1.5 text-xs">
                         <div className="flex items-center gap-2 text-panel-muted">
@@ -371,17 +459,17 @@ export function CapturePage() {
                 </PanelGroup>
               </Panel>
 
-              {/* AI dock (right panel) */}
+              {/* Capture Command dock (right panel) */}
               {aiDockOpen && !aiPoppedOut && (
                 <>
                   <PanelResizeHandle className="w-1 bg-panel-border transition hover:bg-panel-accent" />
                   <Panel defaultSize={30} minSize={20} order={2} id="ai-dock">
                     <div className="flex h-full flex-col border-l border-panel-border">
                       <div className="flex items-center justify-between border-b border-panel-border bg-panel-header px-3 py-1.5">
-                        <span className="text-xs font-medium text-panel-muted">AI Analysis</span>
+                        <span className="text-xs font-medium text-panel-muted">Capture Command</span>
                       </div>
                       <div className="flex-1 overflow-hidden">
-                        {aiPanel}
+                        {captureCommandPanel}
                       </div>
                     </div>
                   </Panel>
@@ -405,15 +493,16 @@ export function CapturePage() {
         </>
       )}
 
-      {/* AI floating window */}
+      {/* Capture Command floating window */}
       {aiDockOpen && aiPoppedOut && viewMode === "packets" && (
         <FloatingWindow
           geom={aiFloat}
           onChange={setAiFloat}
           onDock={() => toggleAiPopOut()}
           onClose={() => setAiDockOpen(false)}
+          title="Capture Command"
         >
-          {aiPanel}
+          {captureCommandPanel}
         </FloatingWindow>
       )}
 
