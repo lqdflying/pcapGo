@@ -194,6 +194,7 @@ def _parse_file_sync(
     Returns ``(total, linktype, conversations, evidence_map)``.
     On failure, all ``.tmp`` files are removed.
     """
+    import app.services.scapy_layers  # noqa: F401 – full protocol dissection
     from scapy.utils import PcapReader
 
     tmp_jsonl = jsonl_path + ".tmp"
@@ -434,20 +435,38 @@ class _EvidenceSampler:
 # the packet-list app-protocol filter (the frontend dropdown offers these
 # lowercase names).
 _TCP_PORT_PROTOCOLS = {
+    21: "FTP",
+    22: "SSH",
+    23: "Telnet",
+    25: "SMTP",
     80: "HTTP",
-    8080: "HTTP",
+    110: "POP3",
+    143: "IMAP",
     443: "TLS",
-    8443: "TLS",
-    6379: "Redis",
+    587: "SMTP",
+    993: "IMAPS",
+    995: "POP3S",
+    1812: "RADIUS",
+    1813: "RADIUS",
     3306: "MySQL",
     5432: "PostgreSQL",
-    22: "SSH",
-    25: "SMTP",
-    587: "SMTP",
-    21: "FTP",
+    6379: "Redis",
+    8080: "HTTP",
+    8443: "TLS",
 }
 _UDP_PORT_PROTOCOLS = {
     53: "DNS",
+    67: "DHCP",
+    68: "DHCP",
+    123: "NTP",
+    137: "NetBIOS",
+    138: "NetBIOS",
+    161: "SNMP",
+    162: "SNMP",
+    514: "Syslog",
+    1900: "SSDP",
+    5353: "mDNS",
+    5355: "LLMNR",
 }
 
 
