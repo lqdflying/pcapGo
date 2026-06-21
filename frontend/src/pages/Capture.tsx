@@ -251,7 +251,7 @@ export function CapturePage() {
             <>
               <button
                 onClick={() => setAiDockOpen(!aiDockOpen)}
-                title={aiDockOpen ? "Close Capture Command panel" : "Open Capture Command panel"}
+                title={aiDockOpen ? "Close AI Tools panel" : "Open AI Tools panel"}
                 className={`rounded-lg p-1.5 transition ${
                   aiDockOpen
                     ? "bg-panel-accent/20 text-panel-accent"
@@ -482,7 +482,7 @@ export function CapturePage() {
                   <Panel defaultSize={30} minSize={20} order={2} id="ai-dock">
                     <div className="flex h-full flex-col border-l border-panel-border">
                       <div className="flex items-center justify-between border-b border-panel-border bg-panel-header px-3 py-1.5">
-                        <span className="text-xs font-medium text-panel-muted">Capture Command</span>
+                        <span className="text-xs font-medium text-panel-muted">AI Tools</span>
                       </div>
                       <div className="flex-1 overflow-hidden">
                         {captureCommandPanel}
@@ -516,7 +516,7 @@ export function CapturePage() {
           onChange={setAiFloat}
           onDock={() => toggleAiPopOut()}
           onClose={() => setAiDockOpen(false)}
-          title="Capture Command"
+          title="AI Tools"
         >
           {captureCommandPanel}
         </FloatingWindow>

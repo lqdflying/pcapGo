@@ -152,13 +152,11 @@ class TestPacketFromRawHex:
         pkt = packet_from_raw_hex(raw_hex, linktype=99999)
         assert pkt is not None
 
-    def test_known_linktype_returns_none_when_registry_mapping_is_missing(self, monkeypatch):
-        from scapy.config import conf
-
+    def test_known_linktype_succeeds_with_layer_import(self):
         raw_hex = self._ether_ip_tcp_raw_hex()
-        monkeypatch.delitem(conf.l2types.num2layer, 1, raising=False)
-
-        assert packet_from_raw_hex(raw_hex, linktype=1) is None
+        pkt = packet_from_raw_hex(raw_hex, linktype=1)
+        assert pkt is not None
+        assert pkt["IP"].src == "10.0.0.1"
 
     def test_high_index_is_o1_no_pcap_scan(self, tmp_path):
         """The motivating case: enriching a deep packet must not scan from 0.

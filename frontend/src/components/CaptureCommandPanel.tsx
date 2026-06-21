@@ -2,12 +2,13 @@ import { useState, useCallback } from "react";
 import { Copy, Check } from "lucide-react";
 import { CaptureCommandBuilder } from "./CaptureCommandBuilder";
 import { CaptureCommandAIGenerator } from "./CaptureCommandAIGenerator";
+import { AIChatPanel } from "./AIChatPanel";
 
 interface Props {
   captureId?: string;
 }
 
-type Mode = "builder" | "ai";
+type Mode = "builder" | "ai" | "chat";
 
 export function CaptureCommandPanel({ captureId }: Props) {
   const [mode, setMode] = useState<Mode>("builder");
@@ -40,7 +41,7 @@ export function CaptureCommandPanel({ captureId }: Props) {
       {/* Mode tabs */}
       <div className="flex border-b border-panel-border bg-panel-header/40 px-3 py-1.5">
         <div className="flex rounded-lg border border-panel-border overflow-hidden">
-          {(["builder", "ai"] as const).map((m) => (
+          {(["builder", "ai", "chat"] as const).map((m) => (
             <button
               key={m}
               onClick={() => switchMode(m)}
@@ -50,7 +51,7 @@ export function CaptureCommandPanel({ captureId }: Props) {
                   : "text-panel-muted hover:bg-panel-border"
               }`}
             >
-              {m === "builder" ? "Builder" : "AI Generate"}
+              {m === "builder" ? "Builder" : m === "ai" ? "AI Generate" : "Chat"}
             </button>
           ))}
         </div>
@@ -60,16 +61,20 @@ export function CaptureCommandPanel({ captureId }: Props) {
       <div className="flex-1 overflow-auto">
         {mode === "builder" ? (
           <CaptureCommandBuilder onCommandChange={setCommand} />
-        ) : (
+        ) : mode === "ai" ? (
           <CaptureCommandAIGenerator
             captureId={captureId}
             onCommandChange={setCommand}
           />
+        ) : captureId ? (
+          <AIChatPanel captureId={captureId} />
+        ) : (
+          <p className="p-4 text-xs text-panel-muted">Open a capture to use chat.</p>
         )}
       </div>
 
       {/* Command preview + copy */}
-      {command && (
+      {command && mode !== "chat" && (
         <div className="border-t border-panel-border bg-panel-header/40">
           <div className="flex items-center justify-between px-3 py-1.5">
             <span className="text-[11px] font-medium text-panel-muted">
