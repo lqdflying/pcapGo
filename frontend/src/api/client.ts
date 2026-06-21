@@ -31,6 +31,16 @@ export interface User {
   email: string | null;
   name: string | null;
   avatar_url: string | null;
+  role: "super_admin" | "user";
+}
+
+export interface AllowedUser {
+  id: string;
+  github_login: string;
+  role: "super_admin" | "user";
+  added_by: string | null;
+  created_at: string;
+  has_logged_in: boolean;
 }
 
 export interface Capture {
@@ -42,6 +52,7 @@ export interface Capture {
   packet_count: number;
   status: string;
   created_at: string;
+  owner_login: string | null;
 }
 
 export interface PacketSummary {
@@ -210,8 +221,12 @@ export async function logout() {
   await api.post("/auth/logout");
 }
 
-export async function listCaptures(): Promise<{ captures: Capture[]; total: number }> {
-  const { data } = await api.get("/api/captures");
+export async function listCaptures(opts?: { all?: boolean; owner?: string }): Promise<{ captures: Capture[]; total: number }> {
+  const params = new URLSearchParams();
+  if (opts?.all) params.set("all", "true");
+  if (opts?.owner) params.set("owner", opts.owner);
+  const qs = params.toString();
+  const { data } = await api.get(`/api/captures${qs ? "?" + qs : ""}`);
   return data;
 }
 
@@ -476,5 +491,26 @@ export async function getStatistics(
   const { data } = await api.get(
     `/api/captures/${captureId}/statistics${qs ? "?" + qs : ""}`
   );
+  return data;
+}
+
+// ── Admin API ─────────────────────────────────────────────────────────────────
+
+export async function listAllowedUsers(): Promise<{ users: AllowedUser[]; total: number }> {
+  const { data } = await api.get("/api/admin/users");
+  return data;
+}
+
+export async function addAllowedUser(github_login: string, role: string = "user"): Promise<AllowedUser> {
+  const { data } = await api.post("/api/admin/users", { github_login, role });
+  return data;
+}
+
+export async function removeAllowedUser(github_login: string): Promise<void> {
+  await api.delete(`/api/admin/users/${encodeURIComponent(github_login)}`);
+}
+
+export async function updateAllowedUserRole(github_login: string, role: string): Promise<AllowedUser> {
+  const { data } = await api.patch(`/api/admin/users/${encodeURIComponent(github_login)}`, { github_login, role });
   return data;
 }

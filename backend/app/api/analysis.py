@@ -12,7 +12,7 @@ from sqlalchemy import select
 from app.config import settings
 from app.db.session import async_session
 from app.models import User, Capture, CaptureStatus, Conversation, Analysis
-from app.core.security import get_current_user
+from app.core.security import get_current_user, get_capture_for_user
 from app.schemas.analysis import AnalysisEvent, AnalysisIssue
 from app.services.llm import analyze_conversation
 
@@ -31,12 +31,7 @@ async def analyze_capture(
         raise HTTPException(status_code=400, detail="LLM is not configured on this server")
 
     async with async_session() as session:
-        result = await session.execute(
-            select(Capture).where(Capture.id == capture_id, Capture.user_id == user.id)
-        )
-        capture = result.scalar_one_or_none()
-        if not capture:
-            raise HTTPException(status_code=404, detail="Capture not found")
+        capture = await get_capture_for_user(session, capture_id, user)
         if capture.status != CaptureStatus.ready:
             raise HTTPException(status_code=400, detail="Capture not yet parsed")
 

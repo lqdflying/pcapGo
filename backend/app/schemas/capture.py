@@ -14,6 +14,7 @@ class CaptureRead(BaseModel):
     packet_count: int
     status: str
     created_at: datetime
+    owner_login: str | None = None
 
     model_config = {"from_attributes": True}
 

@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     # If empty, falls back to jwt_secret (dev only).
     session_secret: str = ""
 
+    # User management
+    admin_github_user: str = ""
+
     @property
     def max_upload_bytes(self) -> int:
         return self.max_upload_mb * 1024 * 1024

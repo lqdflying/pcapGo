@@ -4,6 +4,8 @@ import { Github } from "lucide-react";
 
 export function LoginPage() {
   const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const authError = params.get("auth_error");
 
   // Derive the deep-link target: React Router location.state.from (set by
   // App's protected-route Navigate) or a ?next= query param (set by the 401
@@ -62,8 +64,19 @@ export function LoginPage() {
           <Github className="h-5 w-5" />
           Sign in with GitHub
         </button>
+        {authError === "not_allowed" && (
+          <p className="mt-4 text-sm text-panel-error">
+            Your GitHub account is not authorized to access this application.
+            Please contact the administrator.
+          </p>
+        )}
+        {authError && authError !== "not_allowed" && (
+          <p className="mt-4 text-sm text-panel-error">
+            Authentication failed. Please try again.
+          </p>
+        )}
         <p className="mt-6 text-xs text-panel-muted">
-          No account needed beyond your GitHub profile.
+          Access is restricted to authorized GitHub accounts.
         </p>
       </div>
     </div>

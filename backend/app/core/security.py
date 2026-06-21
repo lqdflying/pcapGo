@@ -66,3 +66,24 @@ async def get_current_user(request: Request):
         if not user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
         return user
+
+
+async def require_admin(request: Request):
+    user = await get_current_user(request)
+    if user.role != "super_admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return user
+
+
+async def get_capture_for_user(session, capture_id: uuid.UUID, user):
+    from app.models import Capture
+    from sqlalchemy import select
+
+    query = select(Capture).where(Capture.id == capture_id)
+    if user.role != "super_admin":
+        query = query.where(Capture.user_id == user.id)
+    result = await session.execute(query)
+    capture = result.scalar_one_or_none()
+    if not capture:
+        raise HTTPException(status_code=404, detail="Capture not found")
+    return capture

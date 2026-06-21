@@ -12,9 +12,9 @@ from sqlalchemy import update
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
-from app.api import auth, uploads, packets, statistics, analysis, chat, capture_command
+from app.api import auth, uploads, packets, statistics, analysis, chat, capture_command, admin
 from app.db.session import engine
-from app.models import Capture, CaptureStatus
+from app.models import Capture, CaptureStatus, AllowedUser
 
 logger = logging.getLogger(__name__)
 
@@ -39,15 +39,44 @@ async def _reset_stuck_captures() -> None:
         await session.commit()
 
 
+async def _ensure_seed_admin() -> None:
+    """Ensure the ADMIN_GITHUB_USER exists in allowed_users with super_admin role."""
+    if not settings.admin_github_user:
+        logger.warning("ADMIN_GITHUB_USER not set; no admin user seeded")
+        return
+
+    from sqlalchemy import select, func
+    from app.db.session import async_session
+
+    async with async_session() as session:
+        result = await session.execute(
+            select(AllowedUser).where(
+                func.lower(AllowedUser.github_login) == func.lower(settings.admin_github_user)
+            )
+        )
+        existing = result.scalar_one_or_none()
+        if not existing:
+            session.add(AllowedUser(
+                github_login=settings.admin_github_user,
+                role="super_admin",
+                added_by=None,
+            ))
+            await session.commit()
+            logger.info("Seeded admin user: %s", settings.admin_github_user)
+        elif existing.role != "super_admin":
+            existing.role = "super_admin"
+            await session.commit()
+            logger.info("Restored super_admin role for seed admin: %s", settings.admin_github_user)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
     await _reset_stuck_captures()
+    await _ensure_seed_admin()
     try:
         yield
     finally:
-        # Close the DB pool cleanly so connections aren't left for Postgres
-        # to reap on shutdown.
         await engine.dispose()
 
 
@@ -79,6 +108,7 @@ app.include_router(statistics.router)
 app.include_router(analysis.router)
 app.include_router(chat.router)
 app.include_router(capture_command.router)
+app.include_router(admin.router)
 
 
 @app.get("/api/health")

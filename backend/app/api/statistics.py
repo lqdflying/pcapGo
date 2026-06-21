@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from app.db.session import async_session
 from app.models import User, Capture, CaptureStatus, Conversation
-from app.core.security import get_current_user
+from app.core.security import get_current_user, get_capture_for_user
 from app.schemas.capture import (
     StatisticsResponse,
     ConversationStats,
@@ -39,12 +39,7 @@ async def get_statistics(
     user: User = Depends(get_current_user),
 ):
     async with async_session() as session:
-        result = await session.execute(
-            select(Capture).where(Capture.id == capture_id, Capture.user_id == user.id)
-        )
-        capture = result.scalar_one_or_none()
-        if not capture:
-            raise HTTPException(status_code=404, detail="Capture not found")
+        capture = await get_capture_for_user(session, capture_id, user)
         if capture.status != CaptureStatus.ready:
             raise HTTPException(status_code=400, detail="Capture not yet parsed")
 

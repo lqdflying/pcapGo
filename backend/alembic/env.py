@@ -7,7 +7,7 @@ from sqlalchemy import pool
 from alembic import context
 
 from app.db.session import Base
-from app.models import User, Capture, Conversation, Analysis  # noqa: ensure models loaded
+from app.models import User, Capture, Conversation, Analysis, AllowedUser  # noqa: ensure models loaded
 
 config = context.config
 if config.config_file_name is not None:
