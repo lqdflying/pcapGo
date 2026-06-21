@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   type Platform,
   type TcpdumpParams,
@@ -46,6 +46,23 @@ const sectionClass = "space-y-2";
 const sectionTitleClass =
   "text-xs font-medium text-panel-text border-b border-panel-border pb-1 mb-2";
 
+function FieldLabel({
+  children,
+  tooltip,
+}: {
+  children: ReactNode;
+  tooltip?: HelpEntry;
+}) {
+  return (
+    <div className={labelClass}>
+      {children}
+      {tooltip && (
+        <HelpTooltip description={tooltip.description} usage={tooltip.usage} />
+      )}
+    </div>
+  );
+}
+
 function Checkbox({
   label,
   checked,
@@ -58,18 +75,20 @@ function Checkbox({
   tooltip?: HelpEntry;
 }) {
   return (
-    <label className="flex items-center gap-1.5 text-[11px] text-panel-muted cursor-pointer">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="rounded border-panel-border accent-[rgb(var(--panel-accent))]"
-      />
-      {label}
+    <div className="flex items-center gap-1.5 text-[11px] text-panel-muted">
+      <label className="flex cursor-pointer items-center gap-1.5">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          className="rounded border-panel-border accent-[rgb(var(--panel-accent))]"
+        />
+        {label}
+      </label>
       {tooltip && (
         <HelpTooltip description={tooltip.description} usage={tooltip.usage} />
       )}
-    </label>
+    </div>
   );
 }
 
@@ -171,7 +190,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
             <h3 className={sectionTitleClass}>{t("captureCommand.capture")}</h3>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className={labelClass}>{t("captureCommand.interface")}<HelpTooltip description={t("helpText.tcpdump.iface")} usage={TCPDUMP_HELP.iface.usage} /></label>
+                <FieldLabel tooltip={{ description: t("helpText.tcpdump.iface"), usage: TCPDUMP_HELP.iface.usage }}>
+                  {t("captureCommand.interface")}
+                </FieldLabel>
                 <input
                   aria-label="Interface"
                   value={tcpdump.iface}
@@ -182,7 +203,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
                 />
               </div>
               <div>
-                <label className={labelClass}>{t("captureCommand.count")}<HelpTooltip description={t("helpText.tcpdump.count")} usage={TCPDUMP_HELP.count.usage} /></label>
+                <FieldLabel tooltip={{ description: t("helpText.tcpdump.count"), usage: TCPDUMP_HELP.count.usage }}>
+                  {t("captureCommand.count")}
+                </FieldLabel>
                 <input
                   aria-label="Packet count"
                   value={tcpdump.count}
@@ -194,7 +217,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
                 />
               </div>
               <div>
-                <label className={labelClass}>{t("captureCommand.snapLength")}<HelpTooltip description={t("helpText.tcpdump.snapLen")} usage={TCPDUMP_HELP.snapLen.usage} /></label>
+                <FieldLabel tooltip={{ description: t("helpText.tcpdump.snapLen"), usage: TCPDUMP_HELP.snapLen.usage }}>
+                  {t("captureCommand.snapLength")}
+                </FieldLabel>
                 <input
                   aria-label="Snapshot length"
                   value={tcpdump.snapLen}
@@ -206,7 +231,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
                 />
               </div>
               <div>
-                <label className={labelClass}>{t("captureCommand.buffer")}<HelpTooltip description={t("helpText.tcpdump.bufferSize")} usage={TCPDUMP_HELP.bufferSize.usage} /></label>
+                <FieldLabel tooltip={{ description: t("helpText.tcpdump.bufferSize"), usage: TCPDUMP_HELP.bufferSize.usage }}>
+                  {t("captureCommand.buffer")}
+                </FieldLabel>
                 <input
                   aria-label="Buffer size"
                   value={tcpdump.bufferSize}
@@ -218,7 +245,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
                 />
               </div>
               <div>
-                <label className={labelClass}>{t("captureCommand.writeFile")}<HelpTooltip description={t("helpText.tcpdump.writeFile")} usage={TCPDUMP_HELP.writeFile.usage} /></label>
+                <FieldLabel tooltip={{ description: t("helpText.tcpdump.writeFile"), usage: TCPDUMP_HELP.writeFile.usage }}>
+                  {t("captureCommand.writeFile")}
+                </FieldLabel>
                 <input
                   aria-label="Write file"
                   value={tcpdump.writeFile}
@@ -228,7 +257,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
                 />
               </div>
               <div>
-                <label className={labelClass}>{t("captureCommand.readFile")}<HelpTooltip description={t("helpText.tcpdump.readFile")} usage={TCPDUMP_HELP.readFile.usage} /></label>
+                <FieldLabel tooltip={{ description: t("helpText.tcpdump.readFile"), usage: TCPDUMP_HELP.readFile.usage }}>
+                  {t("captureCommand.readFile")}
+                </FieldLabel>
                 <input
                   aria-label="Read file"
                   value={tcpdump.readFile}
@@ -245,7 +276,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
             <h3 className={sectionTitleClass}>{t("captureCommand.display")}</h3>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className={labelClass}>{t("captureCommand.verbose")}<HelpTooltip description={t("helpText.tcpdump.verbose")} usage={TCPDUMP_HELP.verbose.usage} /></label>
+                <FieldLabel tooltip={{ description: t("helpText.tcpdump.verbose"), usage: TCPDUMP_HELP.verbose.usage }}>
+                  {t("captureCommand.verbose")}
+                </FieldLabel>
                 <select
                   aria-label="Verbose level"
                   value={tcpdump.verbose}
@@ -260,7 +293,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
                 </select>
               </div>
               <div>
-                <label className={labelClass}>{t("captureCommand.dnsResolve")}<HelpTooltip description={t("helpText.tcpdump.noDns")} usage={TCPDUMP_HELP.noDns.usage} /></label>
+                <FieldLabel tooltip={{ description: t("helpText.tcpdump.noDns"), usage: TCPDUMP_HELP.noDns.usage }}>
+                  {t("captureCommand.dnsResolve")}
+                </FieldLabel>
                 <select
                   aria-label="DNS resolve"
                   value={tcpdump.noDns}
@@ -275,7 +310,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
                 </select>
               </div>
               <div>
-                <label className={labelClass}>{t("captureCommand.hexOutput")}<HelpTooltip description={t("helpText.tcpdump.hexMode")} usage={TCPDUMP_HELP.hexMode.usage} /></label>
+                <FieldLabel tooltip={{ description: t("helpText.tcpdump.hexMode"), usage: TCPDUMP_HELP.hexMode.usage }}>
+                  {t("captureCommand.hexOutput")}
+                </FieldLabel>
                 <select
                   aria-label="Hex output"
                   value={tcpdump.hexMode}
@@ -290,7 +327,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
                 </select>
               </div>
               <div>
-                <label className={labelClass}>{t("captureCommand.timestamp")}<HelpTooltip description={t("helpText.tcpdump.timestamp")} usage={TCPDUMP_HELP.timestamp.usage} /></label>
+                <FieldLabel tooltip={{ description: t("helpText.tcpdump.timestamp"), usage: TCPDUMP_HELP.timestamp.usage }}>
+                  {t("captureCommand.timestamp")}
+                </FieldLabel>
                 <select
                   aria-label="Timestamp format"
                   value={tcpdump.timestamp}
@@ -325,7 +364,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
           <div className={sectionClass}>
             <h3 className={sectionTitleClass}>{t("captureCommand.filters")}</h3>
             <div>
-              <label className={labelClass}>{t("captureCommand.protocolFilter")}<HelpTooltip description={t("helpText.tcpdump.protocol")} usage={TCPDUMP_HELP.protocol.usage} /></label>
+              <FieldLabel tooltip={{ description: t("helpText.tcpdump.protocol"), usage: TCPDUMP_HELP.protocol.usage }}>
+                {t("captureCommand.protocolFilter")}
+              </FieldLabel>
               <select
                 aria-label="Protocol filter"
                 value={tcpdump.protocol}
@@ -341,7 +382,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
             </div>
             <div className="flex gap-2">
               <div className="w-28 shrink-0">
-                <label className={labelClass}>{t("captureCommand.hostDir")}<HelpTooltip description={t("helpText.tcpdump.hostDirection")} usage={TCPDUMP_HELP.hostDirection.usage} /></label>
+                <FieldLabel tooltip={{ description: t("helpText.tcpdump.hostDirection"), usage: TCPDUMP_HELP.hostDirection.usage }}>
+                  {t("captureCommand.hostDir")}
+                </FieldLabel>
                 <select
                   aria-label="Host direction"
                   value={tcpdump.hostDirection}
@@ -358,7 +401,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
                 </select>
               </div>
               <div className="flex-1">
-                <label className={labelClass}>{t("captureCommand.host")}<HelpTooltip description={t("helpText.tcpdump.hostFilter")} usage={TCPDUMP_HELP.hostFilter.usage} /></label>
+                <FieldLabel tooltip={{ description: t("helpText.tcpdump.hostFilter"), usage: TCPDUMP_HELP.hostFilter.usage }}>
+                  {t("captureCommand.host")}
+                </FieldLabel>
                 <input
                   aria-label="Host filter"
                   value={tcpdump.hostFilter}
@@ -372,7 +417,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
             </div>
             <div className="flex gap-2">
               <div className="w-28 shrink-0">
-                <label className={labelClass}>{t("captureCommand.portDir")}<HelpTooltip description={t("helpText.tcpdump.portDirection")} usage={TCPDUMP_HELP.portDirection.usage} /></label>
+                <FieldLabel tooltip={{ description: t("helpText.tcpdump.portDirection"), usage: TCPDUMP_HELP.portDirection.usage }}>
+                  {t("captureCommand.portDir")}
+                </FieldLabel>
                 <select
                   aria-label="Port direction"
                   value={tcpdump.portDirection}
@@ -389,7 +436,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
                 </select>
               </div>
               <div className="flex-1">
-                <label className={labelClass}>{t("captureCommand.port")}<HelpTooltip description={t("helpText.tcpdump.port")} usage={TCPDUMP_HELP.port.usage} /></label>
+                <FieldLabel tooltip={{ description: t("helpText.tcpdump.port"), usage: TCPDUMP_HELP.port.usage }}>
+                  {t("captureCommand.port")}
+                </FieldLabel>
                 <input
                   aria-label="Port filter"
                   value={tcpdump.port}
@@ -401,7 +450,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
             </div>
             <div className="flex gap-2">
               <div className="w-28 shrink-0">
-                <label className={labelClass}>{t("captureCommand.netDir")}<HelpTooltip description={t("helpText.tcpdump.netDirection")} usage={TCPDUMP_HELP.netDirection.usage} /></label>
+                <FieldLabel tooltip={{ description: t("helpText.tcpdump.netDirection"), usage: TCPDUMP_HELP.netDirection.usage }}>
+                  {t("captureCommand.netDir")}
+                </FieldLabel>
                 <select
                   aria-label="Net direction"
                   value={tcpdump.netDirection}
@@ -418,7 +469,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
                 </select>
               </div>
               <div className="flex-1">
-                <label className={labelClass}>{t("captureCommand.networkCidr")}<HelpTooltip description={t("helpText.tcpdump.net")} usage={TCPDUMP_HELP.net.usage} /></label>
+                <FieldLabel tooltip={{ description: t("helpText.tcpdump.net"), usage: TCPDUMP_HELP.net.usage }}>
+                  {t("captureCommand.networkCidr")}
+                </FieldLabel>
                 <input
                   aria-label="Net filter"
                   value={tcpdump.net}
@@ -434,7 +487,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
           <div className={sectionClass}>
             <h3 className={sectionTitleClass}>{t("captureCommand.advanced")}</h3>
             <div>
-              <label className={labelClass}>{t("captureCommand.customBpf")}<HelpTooltip description={t("helpText.tcpdump.customBpf")} usage={TCPDUMP_HELP.customBpf.usage} /></label>
+              <FieldLabel tooltip={{ description: t("helpText.tcpdump.customBpf"), usage: TCPDUMP_HELP.customBpf.usage }}>
+                {t("captureCommand.customBpf")}
+              </FieldLabel>
               <textarea
                 aria-label="Custom BPF"
                 value={tcpdump.customBpf}
@@ -454,7 +509,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
             <h3 className={sectionTitleClass}>{t("captureCommand.capture")}</h3>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className={labelClass}>{t("captureCommand.componentId")}<HelpTooltip description={t("helpText.pktmon.compId")} usage={PKTMON_HELP.compId.usage} /></label>
+                <FieldLabel tooltip={{ description: t("helpText.pktmon.compId"), usage: PKTMON_HELP.compId.usage }}>
+                  {t("captureCommand.componentId")}
+                </FieldLabel>
                 <input
                   aria-label="Component ID"
                   value={pktmon.compId}
@@ -464,7 +521,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
                 />
               </div>
               <div>
-                <label className={labelClass}>{t("captureCommand.packetSize")}<HelpTooltip description={t("helpText.pktmon.packetSize")} usage={PKTMON_HELP.packetSize.usage} /></label>
+                <FieldLabel tooltip={{ description: t("helpText.pktmon.packetSize"), usage: PKTMON_HELP.packetSize.usage }}>
+                  {t("captureCommand.packetSize")}
+                </FieldLabel>
                 <input
                   aria-label="Packet size"
                   value={pktmon.packetSize}
@@ -476,7 +535,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
                 />
               </div>
               <div>
-                <label className={labelClass}>{t("captureCommand.outputFile")}<HelpTooltip description={t("helpText.pktmon.fileName")} usage={PKTMON_HELP.fileName.usage} /></label>
+                <FieldLabel tooltip={{ description: t("helpText.pktmon.fileName"), usage: PKTMON_HELP.fileName.usage }}>
+                  {t("captureCommand.outputFile")}
+                </FieldLabel>
                 <input
                   aria-label="Output file"
                   value={pktmon.fileName}
@@ -486,7 +547,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
                 />
               </div>
               <div>
-                <label className={labelClass}>{t("captureCommand.maxFileSize")}<HelpTooltip description={t("helpText.pktmon.fileSize")} usage={PKTMON_HELP.fileSize.usage} /></label>
+                <FieldLabel tooltip={{ description: t("helpText.pktmon.fileSize"), usage: PKTMON_HELP.fileSize.usage }}>
+                  {t("captureCommand.maxFileSize")}
+                </FieldLabel>
                 <input
                   aria-label="Max file size"
                   value={pktmon.fileSize}
@@ -498,7 +561,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
                 />
               </div>
               <div>
-                <label className={labelClass}>{t("captureCommand.logMode")}<HelpTooltip description={t("helpText.pktmon.logMode")} usage={PKTMON_HELP.logMode.usage} /></label>
+                <FieldLabel tooltip={{ description: t("helpText.pktmon.logMode"), usage: PKTMON_HELP.logMode.usage }}>
+                  {t("captureCommand.logMode")}
+                </FieldLabel>
                 <select
                   aria-label="Log mode"
                   value={pktmon.logMode}
@@ -513,7 +578,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
                 </select>
               </div>
               <div>
-                <label className={labelClass}>{t("captureCommand.packetType")}<HelpTooltip description={t("helpText.pktmon.packetType")} usage={PKTMON_HELP.packetType.usage} /></label>
+                <FieldLabel tooltip={{ description: t("helpText.pktmon.packetType"), usage: PKTMON_HELP.packetType.usage }}>
+                  {t("captureCommand.packetType")}
+                </FieldLabel>
                 <select
                   aria-label="Packet type"
                   value={pktmon.packetType}
@@ -535,7 +602,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
             <h3 className={sectionTitleClass}>{t("captureCommand.filters")}</h3>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className={labelClass}>{t("captureCommand.transport")}<HelpTooltip description={t("helpText.pktmon.transport")} usage={PKTMON_HELP.transport.usage} /></label>
+                <FieldLabel tooltip={{ description: t("helpText.pktmon.transport"), usage: PKTMON_HELP.transport.usage }}>
+                  {t("captureCommand.transport")}
+                </FieldLabel>
                 <select
                   aria-label="Transport protocol"
                   value={pktmon.transport}
@@ -550,7 +619,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
                 </select>
               </div>
               <div>
-                <label className={labelClass}>{t("captureCommand.ipAddress")}<HelpTooltip description={t("helpText.pktmon.ipAddress")} usage={PKTMON_HELP.ipAddress.usage} /></label>
+                <FieldLabel tooltip={{ description: t("helpText.pktmon.ipAddress"), usage: PKTMON_HELP.ipAddress.usage }}>
+                  {t("captureCommand.ipAddress")}
+                </FieldLabel>
                 <input
                   aria-label="IP address filter"
                   value={pktmon.ipAddress}
@@ -560,7 +631,9 @@ export function CaptureCommandBuilder({ onCommandChange }: Props) {
                 />
               </div>
               <div className="col-span-2">
-                <label className={labelClass}>{t("captureCommand.port")}<HelpTooltip description={t("helpText.pktmon.port")} usage={PKTMON_HELP.port.usage} /></label>
+                <FieldLabel tooltip={{ description: t("helpText.pktmon.port"), usage: PKTMON_HELP.port.usage }}>
+                  {t("captureCommand.port")}
+                </FieldLabel>
                 <input
                   aria-label="Port filter"
                   value={pktmon.port}

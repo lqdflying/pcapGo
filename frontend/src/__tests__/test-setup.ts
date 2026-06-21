@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { vi } from "vitest";
-import "../i18n/i18n";
+import "@/i18n/i18n";
 
 // Mock window.location for redirects
 const location = {

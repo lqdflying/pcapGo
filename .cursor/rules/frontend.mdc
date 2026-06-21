@@ -23,6 +23,7 @@ Runs on `http://localhost:5173`, proxies `/api` and `/auth` to backend at `local
 - `StatsTabs` — protocol hierarchy, endpoints (Tx/Rx), conversations, IO graph (bucket/metric controls); click an endpoint/conversation to filter the packet list.
 - `FollowStream` — modal that reconstructs one TCP/UDP conversation's payload (ASCII or hex view), client vs server color-coded; truncation banner when the 1 MB/direction cap is hit.
 - `CaptureCommandPanel` — dockable panel that hosts two modes (tabs): `CaptureCommandBuilder` (form-driven tcpdump/pktmon command with shell-escaped args + live preview + Copy) and `CaptureCommandAIGenerator` (natural-language → tcpdump/pktmon command via `/api/capture-command/generate` SSE; optional capture context). Panel keeps a shared `command` state but clears it on tab switch and at AI-generate start so a stale command can't be copied. Can pop out into a `FloatingWindow`.
+- `HelpTooltip` — portal-based help popover for compact labels; hover is transient, while click/focus stays open until blur, Escape, or outside pointer. Keep viewport positioning clamped for narrow panes/floating windows.
 - `FloatingWindow` — draggable floating window wrapper used to pop out the Capture Command panel.
 
 ## Pages
@@ -30,6 +31,11 @@ Runs on `http://localhost:5173`, proxies `/api` and `/auth` to backend at `local
 - `Dashboard` — upload area + captures list with status polling and delete confirmation. `super_admin` users see an Admin button and can toggle `all=true` capture listing with optional owner filtering.
 - `Admin` — super-admin-only page at `/admin` for allowed GitHub user CRUD, role changes, seed-admin display, and login status.
 - `Capture` — 3-pane inspector with view mode toggle (Packets / Statistics), protocol dropdown, substring search, CSV/JSON export buttons, Follow Stream launch from a conversation row, multi-select packets (click / ctrl-click / shift-range) with an "Explain selected packets" bar (one-shot `/explain` SSE), and a right-side Capture Command dock (toggle + pop-out via `FloatingWindow`). AI chat is reached via the Dashboard threads, not a Capture view mode.
+
+## Internationalization
+- `react-i18next` is initialized from `src/i18n/i18n.ts`; translations live under `src/i18n/locales/{en,zh}/translation.json`.
+- `useLanguageStore` persists `pcapgo-language` and calls `i18n.changeLanguage`; language selectors exist on Login, Dashboard, and Capture so logged-out users can switch before OAuth.
+- User-facing copy in components/pages should use `t(...)` unless it is protocol text, a file extension, command syntax, or another intentional literal.
 
 ## API Client
 - `frontend/src/api/client.ts` exports an axios instance (`baseURL: "/"`, `withCredentials: true`) and typed helpers for all backend endpoints.
@@ -79,7 +85,7 @@ Tests live in `frontend/src/__tests__/`, organized by `components/`, `pages/`, `
 - **Pure logic** (2): API client (axios), Zustand stores, captureCommandBuilder (incl. shell-escaping)
 
 `vitest` config in `vite.config.ts` uses `jsdom`, `globals: true`, and `setupFiles: ["./src/test-setup.ts"]`.
-- `src/test-setup.ts` is a symlink to `src/__tests__/test-setup.ts`; edit the real file in `__tests__/`.
+- `src/test-setup.ts` is the configured setup file and is shared with `src/__tests__/test-setup.ts`; use `@/` alias imports inside setup code so paths resolve from both locations.
 - Source imports use the `@/` alias resolving to `frontend/src/`.
 - Test files are excluded from the app TypeScript build (`tsconfig.json` and `tsconfig.app.json` exclude `src/__tests__` and `src/test-setup.ts`).
 - `tsconfig.test.json` extends `tsconfig.app.json`, includes tests + setup, and adds `vitest/globals` and `@testing-library/jest-dom` types.

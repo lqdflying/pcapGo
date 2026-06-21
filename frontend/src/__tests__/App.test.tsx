@@ -57,7 +57,7 @@ describe("App Router", () => {
     mockGetUser.mockReturnValue(new Promise(() => {}));
     useAuthStore.setState({ user: null, loading: true });
     renderApp("/");
-    expect(screen.getByText("Loading…")).toBeInTheDocument();
+    expect(screen.getByText("Loading...")).toBeInTheDocument();
   });
 
   it("shows login page at / (unauthenticated)", async () => {

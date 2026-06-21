@@ -1,10 +1,17 @@
 import { useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { loginWithGitHub } from "../api/client";
-import { Github } from "lucide-react";
+import { Github, Languages } from "lucide-react";
+import { useLanguageStore, type Language } from "../lib/store";
+
+const LANGUAGES: { value: Language; label: string }[] = [
+  { value: "en", label: "English" },
+  { value: "zh", label: "中文" },
+];
 
 export function LoginPage() {
   const { t } = useTranslation();
+  const { language, setLanguage } = useLanguageStore();
   const location = useLocation();
   const params = new URLSearchParams(location.search);
   const authError = params.get("auth_error");
@@ -46,6 +53,23 @@ export function LoginPage() {
   return (
     <div className="flex h-full items-center justify-center bg-panel-bg">
       <div className="w-full max-w-md rounded-2xl border border-panel-border bg-panel-header p-10 text-center shadow-2xl">
+        <div className="mb-4 flex justify-end">
+          <div className="flex items-center gap-1 rounded-lg border border-panel-border px-1">
+            <Languages className="h-3.5 w-3.5 text-panel-muted" />
+            <select
+              aria-label={t("common.language")}
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as Language)}
+              className="bg-transparent py-1 pr-1 text-xs text-panel-text focus:outline-none"
+            >
+              {LANGUAGES.map((l) => (
+                <option key={l.value} value={l.value}>
+                  {l.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
         <div className="mb-6 flex justify-center">
           <img
             src="/brand/pcapGo_logo_transparent.png"

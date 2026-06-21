@@ -123,6 +123,8 @@ frontend/src/__tests__/
 - Alias `@` -> `./src` so source imports use `@/components/Foo`.
 
 ### Test Setup (`frontend/src/test-setup.ts` and `src/__tests__/test-setup.ts`)
+`frontend/vite.config.ts` loads `frontend/src/test-setup.ts` directly. The setup file is shared with `src/__tests__/test-setup.ts`, so use `@/` alias imports inside setup code (for example `@/i18n/i18n`) rather than location-dependent relative imports. Test files may import factories from `src/__tests__/test-setup.ts` using relative paths from their own directory.
+
 Provides global mocks needed by all tests:
 - `window.location` (redirect testing)
 - `window.matchMedia` (media query stubs)

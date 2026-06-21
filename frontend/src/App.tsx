@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuthStore } from "./lib/store";
 import { getUser } from "./api/client";
 import { LoginPage } from "./pages/Login";
@@ -8,6 +9,7 @@ import { CapturePage } from "./pages/Capture";
 import { AdminPage } from "./pages/Admin";
 
 export function App() {
+  const { t } = useTranslation();
   const { user, loading, setUser, setLoading } = useAuthStore();
   const location = useLocation();
 
@@ -37,7 +39,7 @@ export function App() {
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center bg-panel-bg">
-        <div className="text-sm text-panel-muted">Loading…</div>
+        <div className="text-sm text-panel-muted">{t("common.loading")}</div>
       </div>
     );
   }
