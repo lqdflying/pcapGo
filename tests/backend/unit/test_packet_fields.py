@@ -68,6 +68,52 @@ class TestExtractLayerFields:
         fields = extract_layer_fields(layer)
         assert isinstance(fields, list)
 
+    def test_raw_load_displays_as_hex(self):
+        """Raw layer's load field should display as space-separated hex,
+        not Python bytes repr."""
+        from scapy.packet import Raw
+
+        layer = Raw(b"\x88\xeb\x01\x10\x00\x01\x00\x00\x00\x00")
+        fields = extract_layer_fields(layer)
+        load_field = next(f for f in fields if f["name"] == "load")
+        assert load_field["value"] == "88 eb 01 10 00 01 00 00 00 00"
+        assert not load_field["value"].startswith("b'")
+
+    def test_raw_load_long_payload_truncated(self):
+        """Raw load fields longer than 256 bytes should be truncated with a
+        byte count suffix."""
+        from scapy.packet import Raw
+
+        payload = bytes(range(256)) * 2  # 512 bytes
+        layer = Raw(payload)
+        fields = extract_layer_fields(layer)
+        load_field = next(f for f in fields if f["name"] == "load")
+        assert load_field["value"].endswith("(512 bytes)")
+        assert "..." in load_field["value"]
+        assert not load_field["value"].startswith("b'")
+
+    def test_raw_load_exactly_256_bytes_not_truncated(self):
+        """Payloads of exactly 256 bytes should not be truncated."""
+        from scapy.packet import Raw
+
+        payload = bytes(range(256))
+        layer = Raw(payload)
+        fields = extract_layer_fields(layer)
+        load_field = next(f for f in fields if f["name"] == "load")
+        assert "..." not in load_field["value"]
+        assert "bytes" not in load_field["value"]
+
+    def test_mac_address_still_colon_separated(self):
+        """The existing 6-byte MAC address formatting should still work."""
+        from scapy.layers.l2 import Ether
+
+        layer = Ether(dst="ff:ff:ff:ff:ff:ff", src="00:15:5d:64:14:93")
+        fields = extract_layer_fields(layer)
+        dst_field = next(f for f in fields if f["name"] == "dst")
+        assert dst_field["value"] == "ff:ff:ff:ff:ff:ff"
+        src_field = next(f for f in fields if f["name"] == "src")
+        assert src_field["value"] == "00:15:5d:64:14:93"
+
     def test_field_value_fallback(self):
         from unittest.mock import patch
         from scapy.layers.l2 import Ether

@@ -139,6 +139,48 @@ class TestDetectAppProto:
         assert _detect_app_proto(53, 12345, tcp=False) == "DNS"
         assert _detect_app_proto(12345, 53, tcp=False) == "DNS"
 
+    def test_udp_dhcp(self):
+        assert _detect_app_proto(67, 12345, tcp=False) == "DHCP"
+        assert _detect_app_proto(12345, 68, tcp=False) == "DHCP"
+
+    def test_udp_ntp(self):
+        assert _detect_app_proto(123, 12345, tcp=False) == "NTP"
+
+    def test_udp_netbios(self):
+        assert _detect_app_proto(137, 12345, tcp=False) == "NetBIOS"
+        assert _detect_app_proto(12345, 138, tcp=False) == "NetBIOS"
+
+    def test_udp_snmp(self):
+        assert _detect_app_proto(161, 12345, tcp=False) == "SNMP"
+        assert _detect_app_proto(12345, 162, tcp=False) == "SNMP"
+
+    def test_udp_syslog(self):
+        assert _detect_app_proto(514, 12345, tcp=False) == "Syslog"
+
+    def test_udp_mdns(self):
+        assert _detect_app_proto(5353, 12345, tcp=False) == "mDNS"
+
+    def test_udp_llmnr(self):
+        assert _detect_app_proto(5355, 12345, tcp=False) == "LLMNR"
+
+    def test_udp_ssdp(self):
+        assert _detect_app_proto(1900, 12345, tcp=False) == "SSDP"
+
+    def test_tcp_telnet(self):
+        assert _detect_app_proto(23, 50000, tcp=True) == "Telnet"
+
+    def test_tcp_pop3(self):
+        assert _detect_app_proto(110, 50000, tcp=True) == "POP3"
+
+    def test_tcp_imap(self):
+        assert _detect_app_proto(143, 50000, tcp=True) == "IMAP"
+        assert _detect_app_proto(993, 50000, tcp=True) == "IMAPS"
+        assert _detect_app_proto(995, 50000, tcp=True) == "POP3S"
+
+    def test_tcp_radius(self):
+        assert _detect_app_proto(1812, 50000, tcp=True) == "RADIUS"
+        assert _detect_app_proto(1813, 50000, tcp=True) == "RADIUS"
+
     def test_udp_non_dns_returns_none(self):
         assert _detect_app_proto(12345, 54321, tcp=False) is None
 
