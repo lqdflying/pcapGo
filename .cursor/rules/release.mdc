@@ -21,7 +21,8 @@ Harbor enforces Cosign content trust — every published image MUST be signed be
 - To regenerate keys: `cosign generate-key-pair` (prompts for / accepts `COSIGN_PASSWORD` env var). Rotate via the same command if the key is compromised.
 
 ## Versioning & Tags
-- **Git-tag-driven**. A release tag has the form `v<semver>` (e.g. `v0.2.0`).
+- **Git-tag-driven, with `version.json` as the in-repo source of truth.** The `version` field in `version.json`, the git tag `v$VERSION`, and the Harbor `$VERSION` tag must all agree. A release tag has the form `v<semver>` (e.g. `v0.2.0`).
+- **`version.json`** lives at the repo root: `{ "version": "0.3.0", "buildDate": "" }`. The `version` field drives the frontend UI display (compile-time via Vite `define`), the backend `/api/health` response, and the `FastAPI(version=...)` OpenAPI spec. The `buildDate` field is empty in the repo and stamped at Docker build time via `--build-arg BUILD_DATE`. Update `version.json` to match `$VERSION` **before** building.
 - **Always publish a new full-semver tag**: before building or pushing, check both Git tags and Harbor tags. If the current highest tag is `0.3.4` / `v0.3.4`, the next image MUST be `0.3.5` / `v0.3.5`. Never rebuild, re-push, move, or overwrite an existing full-semver tag. This applies to test images and GA releases.
 - Each release produces **four Harbor tags** for one image (same manifest/digest):
   - `img.aksg.net/pcapgo/pcapgo:<version>` (e.g. `0.2.0`) — **bug-fix / full-semver tag**, immutable, one per release. Never re-push a version tag.
@@ -67,13 +68,17 @@ IMAGE=img.aksg.net/pcapgo/pcapgo
 # 1. Ensure the working tree matches what you want to release.
 #    Commit + push to origin/main FIRST (git tag requires commits on the branch).
 #    The GitHub tag v$VERSION will point at this commit.
+#    Update version.json so the "version" field matches $VERSION:
+sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" version.json
 
 # 2. Pull latest base images (forces every build to use current bases).
 docker pull img.aksg.net/nodejs/nodejs:latest
 docker pull img.aksg.net/python/wolfi-python312:latest
 
 # 3. Build with --pull, tagged with all four tags (same manifest/digest).
+#    BUILD_DATE stamps the buildDate field in version.json inside the image.
 docker build --pull \
+  --build-arg BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
   -t $IMAGE:$VERSION \
   -t $IMAGE:$MINOR \
   -t $IMAGE:$MAJOR \

@@ -11,9 +11,12 @@ WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm ci || npm install
 COPY frontend/ .
+COPY version.json /version.json
 RUN npm run build
 
 FROM img.aksg.net/python/wolfi-python312:latest
+
+ARG BUILD_DATE=""
 
 WORKDIR /app
 
@@ -21,7 +24,12 @@ COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/ .
+COPY version.json /app/version.json
 COPY --from=frontend-build /app/dist /app/frontend-dist
+
+RUN if [ -n "$BUILD_DATE" ]; then \
+      sed -i "s/\"buildDate\": \"\"/\"buildDate\": \"$BUILD_DATE\"/" /app/version.json; \
+    fi
 
 RUN chmod +x /app/entrypoint.sh && mkdir -p /app/uploads
 

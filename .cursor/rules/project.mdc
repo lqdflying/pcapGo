@@ -11,6 +11,7 @@ A self-hosted web app for uploading and analyzing network packet captures (.pcap
 ## Repository Structure
 ```
 pcapGo/
+├── version.json              # Version source of truth (version + buildDate, baked into Docker image)
 ├── Dockerfile                 # Root multi-stage build (frontend + backend, production)
 ├── docker-compose.yml         # SAMPLE: single-container prod compose (copy into a host deploy dir)
 ├── backend/                   # FastAPI (Python 3.12)
@@ -70,7 +71,7 @@ Production mode pulls the pre-built Harbor image, which bundles the React SPA in
 
 > **Sample vs. live deployment:** `docker-compose.yml` and `.env.sample` in this repo are **sample templates**. The live deployment lives in a separate directory on the host (e.g. `~/pcapgo-deploy/`) holding copies named `docker-compose.yml` + `.env` with real secrets; the repo stays free of production secrets. The deploy compose pulls the pre-built Harbor image by default; uncomment the `build:` block to build locally from this repo instead.
 
-> **Image publishing:** building, tagging (`img.aksg.net/pcapgo/pcapgo:<version>` + `:latest`), pushing to Harbor, key-based cosign signing, and Trivy vulnerability scanning / CVE allowlisting are all documented in `release.mdc`. Versions are git-tag-driven (`v0.0.1` → GitHub tag + Harbor `0.0.1` + `latest`). Always build with `--pull` so base images are refreshed to latest on every build.
+> **Image publishing:** building, tagging (`img.aksg.net/pcapgo/pcapgo:<version>` + `:latest`), pushing to Harbor, key-based cosign signing, and Trivy vulnerability scanning / CVE allowlisting are all documented in `release.mdc`. Versions are driven by `version.json` at the repo root (must match the git tag). Always build with `--pull` and `--build-arg BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)` so base images are refreshed and the build timestamp is stamped into the image.
 
 ## Database
 - Engine: `postgresql+asyncpg`
@@ -90,6 +91,7 @@ Production mode pulls the pre-built Harbor image, which bundles the React SPA in
 - Follow Stream and the proto/`q` packet filter re-read sidecars / the pcap in worker threads (`asyncio.to_thread`) so large reads never block the event loop.
 - `DATABASE_URL` controls the DB connection.
 - Settings are loaded via Pydantic `BaseSettings` with `.env` file support and `extra="ignore"`.
+- `version.json` at the repo root is the single source of truth for the app version. It is read by Vite at frontend build time (`__APP_VERSION__`, `__BUILD_DATE__` compile-time constants) and by the backend at startup (`FastAPI(version=...)` and `/api/health` response). The Dockerfile stamps the `buildDate` field via `--build-arg BUILD_DATE`.
 
 ## How to Run
 ```bash

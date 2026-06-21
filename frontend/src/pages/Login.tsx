@@ -103,6 +103,9 @@ export function LoginPage() {
         <p className="mt-6 text-xs text-panel-muted">
           {t("login.accessRestricted")}
         </p>
+        <p className="mt-2 text-[10px] text-panel-muted/60">
+          v{__APP_VERSION__}
+        </p>
       </div>
     </div>
   );

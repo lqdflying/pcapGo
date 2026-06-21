@@ -139,7 +139,10 @@ export function DashboardPage() {
           />
           <div>
             <h1 className="text-lg font-semibold text-panel-text">pcapGo</h1>
-            <p className="text-xs text-panel-muted">{t("dashboard.packetCaptureInspector")}</p>
+            <p className="text-xs text-panel-muted">
+              {t("dashboard.packetCaptureInspector")}
+              <span className="ml-2 text-[10px] opacity-60">v{__APP_VERSION__}</span>
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-4">

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json as _json
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -17,6 +18,11 @@ from app.db.session import engine
 from app.models import Capture, CaptureStatus, AllowedUser, User
 
 logger = logging.getLogger(__name__)
+
+_version_path = Path(__file__).resolve().parent.parent / "version.json"
+_version_info: dict[str, str] = {}
+if _version_path.exists():
+    _version_info = _json.loads(_version_path.read_text())
 
 
 async def _reset_stuck_captures() -> None:
@@ -91,7 +97,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="pcapGo",
     description="pcapGo — Wireshark-like web-based packet capture analyzer",
-    version="0.1.0",
+    version=_version_info.get("version", "0.0.0"),
     lifespan=lifespan,
 )
 
@@ -133,7 +139,12 @@ async def health():
             await conn.execute(_sa_text("SELECT 1"))
     except Exception:
         db_status = "unhealthy"
-    return {"status": "ok", "database": db_status}
+    return {
+        "status": "ok",
+        "database": db_status,
+        "version": _version_info.get("version", "unknown"),
+        "buildDate": _version_info.get("buildDate", ""),
+    }
 
 
 # ── SPA (standalone mode) ──────────────────────────────────────────

@@ -15,6 +15,8 @@ class TestHealthEndpoint:
         # The endpoint reports a database liveness field (wiki/Deployment.md
         # documents this contract). Against the test DB the check must pass.
         assert body["database"] == "healthy"
+        assert "version" in body
+        assert "buildDate" in body
 
     async def test_health_no_auth_required(self, test_client):
         response = await test_client.get("/api/health")

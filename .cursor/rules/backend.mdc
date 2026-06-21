@@ -31,6 +31,7 @@ Python 3.12, FastAPI, SQLAlchemy 2 (async), Alembic, Pydantic v2, scapy, python-
 - Chat: under `/api/captures/{id}/...` — `GET /threads` lists, `POST /threads` creates, `GET /threads/{tid}` reads with messages, `DELETE /threads/{tid}` removes (cascade), `POST /threads/{tid}/messages` persists the user turn then streams the assistant reply via SSE. Detects client disconnect and persists the partial answer in `finally`. 400 if `LLM_API_KEY` is unset. Thread ownership is enforced via `_get_owned_capture` → `_get_owned_thread` (both filter on `Capture.user_id`).
 - Explain selected: `POST /api/captures/{id}/explain` — one-shot SSE explanation of a set of packet indices (`{ indices: [...] }`); streams `explain_packets_stream`. 400 if `LLM_API_KEY` is unset.
 - Capture Command Generator: `POST /api/capture-command/generate` — SSE streaming; body `{ prompt, platform: "tcpdump"|"pktmon", capture_id? }`; streams `capture_command_generate_stream` using `TCPDUMP_GEN_SYSTEM_PROMPT` / `PKTMON_GEN_SYSTEM_PROMPT`. 400 if `LLM_API_KEY` is unset.
+- Health: `GET /api/health` — always HTTP 200; returns `{"status": "ok", "database": "healthy"|"unhealthy", "version": "<semver>", "buildDate": "<ISO8601 or empty>"}`. Version and build date are read from `version.json` at import time.
 
 ## Models (`app/models/capture.py`)
 - `Capture`: id, user_id, filename, size_bytes, sha256, linktype (default 1), packet_count, status (`CaptureStatus` enum), stored_path, parsed_index_path, created_at. `chat_threads` relationship cascades delete.
@@ -75,6 +76,7 @@ Python 3.12, FastAPI, SQLAlchemy 2 (async), Alembic, Pydantic v2, scapy, python-
 ## Startup Recovery (`app/main.py`)
 - On startup `_reset_stuck_captures()` flips any capture still in `parsing` status to `failed`, because FastAPI BackgroundTasks do not survive a worker restart.
 - On startup `_ensure_seed_admin()` creates/restores `ADMIN_GITHUB_USER` in `allowed_users` as `super_admin` and syncs any matching existing `users.role`.
+- `version.json` is loaded from the repo/image root at import time. The `version` field is used for `FastAPI(version=...)` and the `/api/health` response; `buildDate` is stamped at Docker build time via `--build-arg BUILD_DATE`.
 
 ## Settings (`app/config.py`)
 - Pydantic `BaseSettings` with `.env` file support, `extra="ignore"`.
