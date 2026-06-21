@@ -8,6 +8,7 @@ import pytest
 from app.services.packet_fields import (
     extract_layer_fields,
     read_packet_at,
+    packet_from_raw_hex,
     enrich_layers_with_fields,
 )
 
@@ -115,6 +116,83 @@ class TestReadPacketAt:
     def test_read_packet_at_missing_file(self):
         result = read_packet_at("/nonexistent/path.pcap", 0)
         assert result is None
+
+
+# ---------------------------------------------------------------------------
+# packet_from_raw_hex (O(1) reconstruction)
+# ---------------------------------------------------------------------------
+
+class TestPacketFromRawHex:
+    def _ether_ip_tcp_raw_hex(self) -> str:
+        from scapy.layers.l2 import Ether
+        from scapy.layers.inet import IP, TCP
+        pkt = Ether(src="00:11:22:33:44:55", dst="66:77:88:99:aa:bb") / \
+            IP(src="10.0.0.1", dst="10.0.0.2") / TCP(sport=12345, dport=80)
+        return " ".join(f"{b:02x}" for b in bytes(pkt))
+
+    def test_reconstructs_ethernet_packet(self):
+        raw_hex = self._ether_ip_tcp_raw_hex()
+        pkt = packet_from_raw_hex(raw_hex, linktype=1)
+        assert pkt is not None
+        assert pkt["IP"].src == "10.0.0.1"
+        assert pkt["IP"].dst == "10.0.0.2"
+        assert pkt["TCP"].dport == 80
+
+    def test_returns_none_for_empty_hex(self):
+        assert packet_from_raw_hex("", linktype=1) is None
+        assert packet_from_raw_hex("   ", linktype=1) is None
+
+    def test_returns_none_for_invalid_hex(self):
+        assert packet_from_raw_hex("not hex at all", linktype=1) is None
+        assert packet_from_raw_hex("zz", linktype=1) is None
+
+    def test_unknown_linktype_falls_back_to_raw(self):
+        # An unknown linktype should not raise; scapy falls back to Raw.
+        raw_hex = self._ether_ip_tcp_raw_hex()
+        pkt = packet_from_raw_hex(raw_hex, linktype=99999)
+        assert pkt is not None
+
+    def test_known_linktype_returns_none_when_registry_mapping_is_missing(self, monkeypatch):
+        from scapy.config import conf
+
+        raw_hex = self._ether_ip_tcp_raw_hex()
+        monkeypatch.delitem(conf.l2types.num2layer, 1, raising=False)
+
+        assert packet_from_raw_hex(raw_hex, linktype=1) is None
+
+    def test_high_index_is_o1_no_pcap_scan(self, tmp_path):
+        """The motivating case: enriching a deep packet must not scan from 0.
+
+        We build a 5-packet pcap, then reconstruct packet #4 purely from its
+        raw_hex WITHOUT having read_packet_at iterate the file. We assert the
+        reconstructed packet matches the original high-index packet's fields.
+        """
+        from scapy.layers.l2 import Ether
+        from scapy.layers.inet import IP, TCP
+        from scapy.utils import wrpcap
+
+        pkts = [
+            Ether() / IP(src=f"10.0.0.{i}", dst="10.0.0.99") / TCP(sport=1000 + i, dport=80)
+            for i in range(5)
+        ]
+        pcap_path = tmp_path / "many.pcap"
+        wrpcap(str(pcap_path), pkts)
+
+        # The last packet's raw_hex, derived the same way the parser stores it.
+        last = pkts[-1]
+        raw_hex = " ".join(f"{b:02x}" for b in bytes(last))
+
+        # Reconstruct O(1) — this never opens the pcap.
+        reconstructed = packet_from_raw_hex(raw_hex, linktype=1)
+        assert reconstructed is not None
+        assert reconstructed["IP"].src == "10.0.0.4"
+        assert reconstructed["TCP"].sport == 1004
+
+        # Cross-check against the slow path (which scans from 0).
+        slow = read_packet_at(str(pcap_path), 4)
+        assert slow is not None
+        assert slow["IP"].src == reconstructed["IP"].src
+        assert slow["TCP"].sport == reconstructed["TCP"].sport
 
 
 # ---------------------------------------------------------------------------

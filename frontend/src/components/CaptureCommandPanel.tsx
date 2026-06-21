@@ -14,6 +14,16 @@ export function CaptureCommandPanel({ captureId }: Props) {
   const [command, setCommand] = useState("");
   const [copied, setCopied] = useState(false);
 
+  const switchMode = useCallback((m: Mode) => {
+    if (m === mode) return;
+    setMode(m);
+    // Clear the shared command so a stale value from the other mode can't be
+    // copied. Each mode re-populates it via onCommandChange as appropriate
+    // (Builder re-emits on mount; AI only on a successful generation).
+    setCommand("");
+    setCopied(false);
+  }, [mode]);
+
   const handleCopy = useCallback(async () => {
     if (!command) return;
     try {
@@ -33,7 +43,7 @@ export function CaptureCommandPanel({ captureId }: Props) {
           {(["builder", "ai"] as const).map((m) => (
             <button
               key={m}
-              onClick={() => setMode(m)}
+              onClick={() => switchMode(m)}
               className={`px-3 py-1 text-xs font-medium transition ${
                 mode === m
                   ? "bg-panel-accent text-panel-header"

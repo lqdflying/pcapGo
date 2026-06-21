@@ -323,7 +323,7 @@ export async function streamChatMessage(
     }
   );
   if (!resp.ok || !resp.body) {
-    opts.onError?.("Request failed");
+    opts.onError?.(await extractErrorMessage(resp));
     return;
   }
   await readSSE(resp, opts.onDelta, opts.onError);
@@ -359,6 +359,35 @@ async function readSSE(
   }
 }
 
+// Read the backend's specific error message from a non-ok response. FastAPI
+// returns {"detail": "..."} (HTTPException) or {"detail": [...]} (validation);
+// fall back to the response text, then a generic message. This keeps the
+// "LLM is not configured on this server" 400 (and similar) visible to the
+// user instead of being collapsed to "Request failed".
+async function extractErrorMessage(resp: Response): Promise<string> {
+  try {
+    const text = await resp.text();
+    if (!text) return `Request failed (${resp.status})`;
+    try {
+      const obj = JSON.parse(text);
+      const detail = obj?.detail;
+      if (typeof detail === "string" && detail) return detail;
+      if (Array.isArray(detail) && detail.length) {
+        // Pydantic validation error: join the messages.
+        const msgs = detail
+          .map((d: any) => d?.msg)
+          .filter((m: unknown) => typeof m === "string" && m);
+        if (msgs.length) return msgs.join("; ");
+      }
+      return text;
+    } catch {
+      return text;
+    }
+  } catch {
+    return `Request failed (${resp.status})`;
+  }
+}
+
 export async function streamExplainPackets(
   captureId: string,
   indices: number[],
@@ -379,7 +408,7 @@ export async function streamExplainPackets(
     }
   );
   if (!resp.ok) {
-    opts.onError?.("Request failed");
+    opts.onError?.(await extractErrorMessage(resp));
     return;
   }
   await readSSE(resp, opts.onDelta, opts.onError);
@@ -409,7 +438,7 @@ export async function streamCaptureCommandGenerate(
     signal: opts.signal,
   });
   if (!resp.ok || !resp.body) {
-    opts.onError?.("Request failed");
+    opts.onError?.(await extractErrorMessage(resp));
     return;
   }
   await readSSE(resp, opts.onDelta, opts.onError);

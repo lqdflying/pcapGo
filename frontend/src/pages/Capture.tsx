@@ -59,7 +59,6 @@ export function CapturePage() {
     selectedPacketIdx,
     selectedIndices,
     selectPacket,
-    setSelectedPacket,
     filterProto,
     setFilterProto,
   } = useCaptureStore();
@@ -86,6 +85,7 @@ export function CapturePage() {
   const [followConv, setFollowConv] = useState<ConversationStats | null>(null);
   const [explainText, setExplainText] = useState("");
   const [explainStreaming, setExplainStreaming] = useState(false);
+  const [explainError, setExplainError] = useState<string | null>(null);
   const explainAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -161,10 +161,12 @@ export function CapturePage() {
   const explainSelected = useCallback(async () => {
     if (!selectedIndices.length || explainStreaming || !id) return;
     setExplainText("");
+    setExplainError(null);
     setExplainStreaming(true);
     const controller = new AbortController();
     explainAbortRef.current = controller;
     let acc = "";
+    let errorSet = false;
     try {
       await streamExplainPackets(id, selectedIndices, {
         signal: controller.signal,
@@ -172,9 +174,18 @@ export function CapturePage() {
           acc += text;
           setExplainText(acc);
         },
+        onError: (msg) => {
+          setExplainError(msg);
+          errorSet = true;
+          controller.abort();
+        },
       });
     } catch {
-      // aborted or network error
+      // aborted or network error — surface a message only if we got none from
+      // the onError callback (e.g. a hard network failure).
+      if (acc === "" && !errorSet) {
+        setExplainError("Explanation request failed.");
+      }
     } finally {
       setExplainStreaming(false);
       explainAbortRef.current = null;
@@ -188,6 +199,7 @@ export function CapturePage() {
   const dismissExplain = () => {
     setExplainText("");
     setExplainStreaming(false);
+    setExplainError(null);
     explainAbortRef.current?.abort();
   };
 
@@ -370,7 +382,7 @@ export function CapturePage() {
                         </div>
                       )}
                       {/* Explain result */}
-                      {(explainText || explainStreaming) && (
+                      {(explainText || explainStreaming || explainError) && (
                         <div className="border-t border-panel-border bg-panel-header/40 px-3 py-2">
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-[11px] font-medium text-panel-muted">Packet Explanation</span>
@@ -383,7 +395,11 @@ export function CapturePage() {
                             </button>
                           </div>
                           <div className="max-h-40 overflow-auto rounded border border-panel-border bg-panel-bg px-3 py-2">
-                            {explainText ? (
+                            {explainError ? (
+                              <p className="whitespace-pre-wrap text-xs leading-relaxed text-panel-error">
+                                {explainError}
+                              </p>
+                            ) : explainText ? (
                               <p className="whitespace-pre-wrap text-xs leading-relaxed text-panel-text">
                                 {explainText}
                               </p>

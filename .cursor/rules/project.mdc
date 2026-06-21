@@ -15,12 +15,12 @@ pcapGo/
 ├── docker-compose.yml         # SAMPLE: single-container prod compose (copy into a host deploy dir)
 ├── backend/                   # FastAPI (Python 3.12)
 │   ├── app/
-│   │   ├── api/               # Route handlers (auth, uploads, packets, statistics, analysis, chat)
+│   │   ├── api/               # Route handlers (auth, uploads, packets, statistics, analysis, chat, capture_command)
 │   │   ├── core/              # Security helpers (JWT cookie auth)
 │   │   ├── db/                # Async engine, session, Base
 │   │   ├── models/            # ORM models (User, Capture, Conversation, Analysis, ChatThread, ChatMessage)
 │   │   ├── schemas/           # Pydantic v2 response models
-│   │   └── services/          # pcap_parser (scapy), flows, follow (stream recon), llm
+│   │   └── services/          # pcap_parser (scapy), flows, follow (stream recon), llm, packet_fields
 │   ├── alembic/               # DB migrations (0001_initial, 0002_chat_threads)
 │   ├── pytest.ini             # pytest config (testpaths points to ../tests/backend)
 │   ├── Dockerfile             # Backend-only build (test compose)
@@ -28,23 +28,23 @@ pcapGo/
 │   └── requirements.txt
 ├── frontend/                  # React 18 + TypeScript + Vite + Tailwind CSS
 │   ├── src/
-│   │   ├── api/               # Axios API client + fetch-based chat streaming + TS interfaces
-│   │   ├── components/        # Uploader, PacketList, PacketTree, HexViewer, StatsTabs, AIAnalysisPanel, FollowStream
-│   │   ├── lib/               # Zustand stores (useAuthStore, useCaptureStore)
+│   │   ├── api/               # Axios API client + fetch-based chat/explain/capture-command streaming + TS interfaces
+│   │   ├── components/        # Uploader, PacketList, PacketTree, HexViewer, StatsTabs, FollowStream, CaptureCommandPanel (Builder/AIGenerator), FloatingWindow
+│   │   ├── lib/               # Zustand stores (useAuthStore, useCaptureStore, useThemeStore, useAIDockStore) + captureCommandBuilder
 │   │   ├── pages/             # Login, Dashboard, Capture
-│   │   ├── __tests__/         # vitest tests (13 test files)
+│   │   ├── __tests__/         # vitest tests
 │   │   └── test-setup.ts      # symlink to src/__tests__/test-setup.ts
 │   └── vite.config.ts         # Includes vitest config (setupFiles + globals)
 ├── tests/
 │   ├── .env.example           # Test/dev env template (full 3-container local stack)
 │   ├── Dockerfile.nginx       # Multi-stage frontend + nginx build (test compose)
 │   ├── docker-compose.yml     # 3-container test stack (postgres + web + nginx)
-│   └── backend/               # pytest tests (~250 total)
+│   └── backend/               # pytest tests
 │       ├── conftest.py        # Shared async fixtures, sys.path patch
 │       ├── api/               # Integration tests (httpx.AsyncClient + ASGITransport)
 │       ├── models/            # Model CRUD tests
 │       ├── services/          # Service-level tests (currently empty)
-│       ├── unit/              # Pure unit tests (LLM normalization, etc.)
+│       ├── unit/              # Pure unit tests (LLM normalization, packet fields, capture-command LLM, schemas)
 │       └── test_migrations.py # Migration 0001 + 0002 metadata + roundtrip
 ├── nginx/nginx.conf           # Nginx proxy config; explicitly does NOT serve /uploads
 ├── uploads/                   # Per-user pcap files and JSONL/index sidecars
@@ -80,7 +80,7 @@ Production mode pulls the pre-built Harbor image, which bundles the React SPA in
 
 ## Key Conventions
 - All Python files start with `from __future__ import annotations`.
-- All API routes return Pydantic response models except the SSE endpoints: `/api/captures/{id}/ai` (full analysis) and `/api/captures/{id}/threads/{tid}/messages` (chat) — both `StreamingResponse` with `media_type="text/event-stream"`.
+- All API routes return Pydantic response models except the SSE endpoints: `/api/captures/{id}/ai` (full analysis), `/api/captures/{id}/threads/{tid}/messages` (chat), `/api/captures/{id}/explain` (one-shot packet explanation), and `/api/capture-command/generate` (tcpdump/pktmon command generation) — all `StreamingResponse` with `media_type="text/event-stream"`.
 - Uploads are streamed to a temp file, validated by pcap magic bytes, then atomically renamed to `uploads/<user_id>/<capture_id>.pcap`.
 - Parsing runs as a FastAPI `BackgroundTask` and is offloaded to a worker thread with `asyncio.to_thread`. It writes four sidecars: `.jsonl`, `.summary.jsonl`, `.offsets.bin` (binary offset pairs), `.index.json`.
 - Captures never expose `/uploads/` via StaticFiles or nginx; files are served only through authenticated API routes.
@@ -113,10 +113,10 @@ cd frontend && npm install && npm run dev
 cd backend && python -m pytest -v
 
 # Backend unit tests only
-cd backend && python -m pytest ../tests/backend/unit/ -v
+cd backend && python -m pytest -c pytest.ini ../tests/backend/unit/ -v
 
 # Backend API integration tests only
-cd backend && python -m pytest ../tests/backend/api/ -v
+cd backend && python -m pytest -c pytest.ini ../tests/backend/api/ -v
 
 # All frontend tests (vitest + jsdom, no backend needed)
 cd frontend && npx vitest run
@@ -131,8 +131,8 @@ cd frontend && npm run typecheck:test
 Test DB: `postgresql+asyncpg://pcap:pcap@localhost:5432/pcap_test`
 
 ### Test Coverage Summary
-- **Backend**: ~250 tests (unit + integration + migrations) — requires PostgreSQL
-- **Frontend**: 13 test files (117 tests) — self-contained, no server needed
+- **Backend**: 306 tests (unit + integration + migrations) across 26 test files — requires PostgreSQL
+- **Frontend**: 16 test files (251 tests) — self-contained, no server needed
 - **Test frameworks**: pytest + pytest-asyncio (backend), vitest + @testing-library/react (frontend)
 
 ## Environment Variables

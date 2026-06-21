@@ -27,7 +27,7 @@ from app.schemas.capture import (
     FollowStreamResponse,
 )
 from app.services.follow import follow_stream_sync
-from app.services.packet_fields import read_packet_at, enrich_layers_with_fields
+from app.services.packet_fields import read_packet_at, packet_from_raw_hex, enrich_layers_with_fields
 
 logger = logging.getLogger(__name__)
 
@@ -379,9 +379,25 @@ async def get_packet_detail(
         raise HTTPException(status_code=404, detail="Packet record not found")
 
     layers = record.get("layers", [])
-    if capture.stored_path and Path(capture.stored_path).exists():
+    raw_hex = record.get("raw_hex", "")
+    index_linktype = index.get("linktype")
+    if capture.linktype is not None:
+        linktype = capture.linktype
+    elif index_linktype is not None:
+        linktype = index_linktype
+    else:
+        linktype = 1
+    if raw_hex or (capture.stored_path and Path(capture.stored_path).exists()):
         try:
-            pkt = await asyncio.to_thread(read_packet_at, capture.stored_path, packet_idx)
+            # O(1) preferred path: reconstruct the packet from its stored hex
+            # dump + the capture link type, avoiding a full pcap re-scan.
+            pkt = None
+            if raw_hex:
+                pkt = await asyncio.to_thread(packet_from_raw_hex, raw_hex, linktype)
+            # Fallback (O(idx)): re-read the original pcap when raw_hex was
+            # missing or could not be dissected.
+            if pkt is None and capture.stored_path and Path(capture.stored_path).exists():
+                pkt = await asyncio.to_thread(read_packet_at, capture.stored_path, packet_idx)
             if pkt is not None:
                 enrich_layers_with_fields(layers, pkt)
         except Exception:

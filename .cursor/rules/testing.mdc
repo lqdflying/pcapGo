@@ -19,9 +19,17 @@ Requires PostgreSQL running locally: `pcap:pcap@localhost:5432/pcap_test`
 ```
 tests/backend/
 ├── api/            # Integration tests (httpx.AsyncClient + ASGITransport)
+│   ├── test_uploads.py / test_packets.py / test_statistics.py
+│   ├── test_analysis.py / test_chat.py / test_follow.py / test_export.py
+│   └── test_capture_command.py   # POST /api/capture-command/generate (LLM-gated SSE)
 ├── models/         # Model CRUD tests (SQLAlchemy async sessions)
 ├── services/       # Service-level tests (currently empty)
 ├── unit/           # Pure unit tests (no DB)
+│   ├── test_llm.py / test_explain_llm.py
+│   ├── test_capture_command_llm.py
+│   ├── test_packet_fields.py     # extract_layer_fields, packet_from_raw_hex (O(1)), enrich guard
+│   ├── test_serialize_packets.py
+│   └── test_schemas_field_node.py
 ├── conftest.py     # Shared fixtures (session-scoped engine, per-test DELETE)
 └── test_migrations.py
 ```
@@ -77,27 +85,31 @@ cd frontend && npm run typecheck
 cd frontend && npm run typecheck:test
 ```
 
-### Test Structure (13 test files under `frontend/src/__tests__/`)
+### Test Structure (16 test files under `frontend/src/__tests__/`)
 ```
 frontend/src/__tests__/
-├── test-setup.ts                # Global mocks + mock data factories
-├── App.test.tsx                 # Router + auth routing integration
+├── test-setup.ts                       # Global mocks + mock data factories
+├── App.test.tsx                        # Router + auth routing integration
 ├── api/
-│   └── client.test.ts          # Axios API client + 401 interceptor
+│   └── client.test.ts                 # Axios API client + 401 interceptor
 ├── lib/
-│   └── store.test.ts           # Zustand stores (useAuthStore, useCaptureStore)
+│   ├── store.test.ts                  # Zustand stores (useAuthStore, useCaptureStore, useThemeStore, useAIDockStore)
+│   └── captureCommandBuilder.test.ts  # tcpdump/pktmon command builder + shell escaping (shellQuote)
 ├── components/
-│   ├── Uploader.test.tsx        # File drop validation
-│   ├── PacketList.test.tsx      # Virtualized list rendering
-│   ├── PacketTree.test.tsx      # Protocol layer tree expand/collapse + layer selection highlights hex
-│   ├── HexViewer.test.tsx       # Hex/ASCII dump formatting + highlighted byte ranges
-│   ├── StatsTabs.test.tsx       # Statistics tab navigation + Tx/Rx columns + IO graph controls
-│   ├── AIAnalysisPanel.test.tsx # SSE event parsing + rendering
-│   └── FollowStream.test.tsx    # Follow-stream modal: ASCII/hex view + client/server coloring
+│   ├── Uploader.test.tsx              # File drop validation
+│   ├── PacketList.test.tsx            # Virtualized list rendering
+│   ├── PacketTree.test.tsx            # Protocol layer tree expand/collapse + layer selection highlights hex
+│   ├── HexViewer.test.tsx             # Hex/ASCII dump formatting + highlighted byte ranges
+│   ├── StatsTabs.test.tsx             # Statistics tab navigation + Tx/Rx columns + IO graph controls
+│   ├── FollowStream.test.tsx          # Follow-stream modal: ASCII/hex view + client/server coloring
+│   ├── CaptureCommandPanel.test.tsx   # Builder/AI tabs, shared command state, stale-command clear regression
+│   ├── CaptureCommandBuilder.test.tsx # tcpdump/pktmon form → command preview
+│   ├── CaptureCommandAIGenerator.test.tsx # AI prompt → SSE streaming + extract command
+│   └── FloatingWindow.test.tsx        # Draggable floating window wrapper
 └── pages/
-    ├── Login.test.tsx           # Unauthenticated redirect to GitHub
-    ├── Dashboard.test.tsx       # Upload + captures list + delete confirmation
-    └── Capture.test.tsx         # 3-pane inspector with view mode toggle + protocol dropdown + pagination
+    ├── Login.test.tsx                 # Unauthenticated redirect to GitHub
+    ├── Dashboard.test.tsx             # Upload + captures list + delete confirmation
+    └── Capture.test.tsx               # 3-pane inspector + view toggle + Explain error surfacing + command dock
 ```
 
 ### Config (in `frontend/vite.config.ts` test block)

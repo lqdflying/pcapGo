@@ -18,16 +18,18 @@ Python 3.12, FastAPI, SQLAlchemy 2 (async), Alembic, Pydantic v2, scapy, python-
 - Alembic migrations use a synchronous driver; `env.py` strips `+asyncpg`/`+psycopg_async` from `DATABASE_URL`.
 
 ## API Routes
-- Prefixes: `/api/captures`, `/auth`, `/api/health`.
+- Prefixes: `/api/captures`, `/api/capture-command`, `/auth`, `/api/health`.
 - Dependencies: `get_current_user` for auth; routes open their own `async_session()` context for DB access.
 - Uploads: `POST /api/captures` — validates extensions (.pcap, .pcapng, .cap, plus tcpdump rotated suffixes like `.pcap0`) and pcap magic bytes, streams to a temp file, enforces `max_upload_bytes`, creates the DB record, and spawns `parse_pcap` as a background task.
 - Captures: `GET /api/captures` lists with pagination; `GET /api/captures/{id}` reads one; `DELETE /api/captures/{id}` removes the DB row and best-effort filesystem sidecars (`.index.json`, `.jsonl`, `.summary.jsonl`, `.offsets.bin`) plus evicts the in-memory index AND proto-filter caches.
-- Packets: `GET /api/captures/{id}/packets` reads `index.json`, supports `?proto=`, `?q=` (case-insensitive substring on src/dst/info/proto/app_proto), `?offset=`, `?limit=` (default 200, max 10000; filters apply to `total`). `GET /api/captures/{id}/packets/{packet_idx}` returns full detail from `.jsonl`.
+- Packets: `GET /api/captures/{id}/packets` reads `index.json`, supports `?proto=`, `?q=` (case-insensitive substring on src/dst/info/proto/app_proto), `?offset=`, `?limit=` (default 200, max 10000; filters apply to `total`). `GET /api/captures/{id}/packets/{packet_idx}` returns full detail from `.jsonl` and enriches each protocol-tree node with Wireshark-parity `fields` (name/value/offset/length) on demand. Enrichment is O(1): the packet is reconstructed from the stored `raw_hex` + the capture `linktype` via `packet_fields.packet_from_raw_hex` (scapy), with `read_packet_at` (full-pcap scan) only as a fallback when `raw_hex` is missing or dissection fails.
 - Follow Stream: `GET /api/captures/{id}/follow` — reconstructs one TCP/UDP conversation's transport payload (query params `src_ip`, `src_port`, `dst_ip`, `dst_port`, `proto` ∈ {tcp,udp}); re-reads the pcap in a worker thread; payload capped at 1 MB per direction; returns base64 segments split by client/server direction.
 - Export: `GET /api/captures/{id}/export?format=csv|json` — streams the (optionally `proto`/`q`-filtered) packet list as CSV or JSON; uses a sync generator run in Starlette's threadpool so large captures never buffer fully in memory.
 - Statistics: `GET /api/captures/{id}/statistics` — aggregates from conversations; query params `bucket_seconds` (snaps to `{1, 10, 30, 60}` seconds) and `metric` (`packets` or `bytes`).
 - Analysis (full): `GET /api/captures/{id}/ai` — SSE streaming; aborts if the client disconnects; persists only successful analyses.
 - Chat: under `/api/captures/{id}/...` — `GET /threads` lists, `POST /threads` creates, `GET /threads/{tid}` reads with messages, `DELETE /threads/{tid}` removes (cascade), `POST /threads/{tid}/messages` persists the user turn then streams the assistant reply via SSE. Detects client disconnect and persists the partial answer in `finally`. 400 if `LLM_API_KEY` is unset. Thread ownership is enforced via `_get_owned_capture` → `_get_owned_thread` (both filter on `Capture.user_id`).
+- Explain selected: `POST /api/captures/{id}/explain` — one-shot SSE explanation of a set of packet indices (`{ indices: [...] }`); streams `explain_packets_stream`. 400 if `LLM_API_KEY` is unset.
+- Capture Command Generator: `POST /api/capture-command/generate` — SSE streaming; body `{ prompt, platform: "tcpdump"|"pktmon", capture_id? }`; streams `capture_command_generate_stream` using `TCPDUMP_GEN_SYSTEM_PROMPT` / `PKTMON_GEN_SYSTEM_PROMPT`. 400 if `LLM_API_KEY` is unset.
 
 ## Models (`app/models/capture.py`)
 - `Capture`: id, user_id, filename, size_bytes, sha256, linktype (default 1), packet_count, status (`CaptureStatus` enum), stored_path, parsed_index_path, created_at. `chat_threads` relationship cascades delete.
@@ -54,6 +56,14 @@ Python 3.12, FastAPI, SQLAlchemy 2 (async), Alembic, Pydantic v2, scapy, python-
 - `_get_client()` returns an `AsyncOpenAI(base_url, api_key)`.
 - `analyze_conversation(capture, conversation)` — non-streaming, builds a prompt from conversation metadata + `evidence_json`, parses the JSON response (`_extract_json_object` handles fenced blocks), normalizes summary/issues (`_normalize_issues` clamps severity to the documented enum, drops non-object items). Raises on API error so the SSE handler decides whether to record a failure row.
 - `chat_stream(context, history, question)` — streaming async generator; system prompt scopes the assistant to the capture and tells it to decline off-topic questions; sends history (user/assistant turns only) then the current question; yields text deltas.
+- `explain_packets_stream(capture, packets)` — streaming async generator; builds a prompt from the selected packets' summaries/layer trees and yields a plain-text explanation as deltas. Used by `POST /api/captures/{id}/explain`.
+- `capture_command_generate_stream(prompt, platform, capture=None)` — streaming async generator; uses `TCPDUMP_GEN_SYSTEM_PROMPT` or `PKTMON_GEN_SYSTEM_PROMPT` (per platform), optionally injects capture context, and yields a tcpdump/pktmon command as deltas. Used by `POST /api/capture-command/generate`.
+
+## Packet Fields (`app/services/packet_fields.py`)
+- `extract_layer_fields(layer)` — Wireshark-style per-field rows (`name`, `value`, `offset`, `length`) for a single scapy layer; `i2repr` with `str(raw_val)` fallback on error.
+- `packet_from_raw_hex(raw_hex, linktype=1)` — O(1) reconstruction of a single scapy packet from its stored hex dump + the capture link type (mirrors `PcapReader`'s `conf.l2types.num2layer` mapping). For known linktypes (Ethernet, Raw IP, Linux SLL, etc.) returns `None` when dissection produces only a `Raw` layer, signalling callers to fall back to `read_packet_at()`. For unknown linktypes, falls back to `Raw`. Returns `None` on missing/invalid hex or dissection failure.
+- `read_packet_at(stored_path, idx)` — O(idx) fallback that re-opens the pcap and scans from packet 0; used only when `packet_from_raw_hex` returns `None`.
+- `enrich_layers_with_fields(record_layers, pkt)` — walks the JSONL layer tree and the scapy payload chain in parallel, attaching `fields` to each node by position; logs a debug-level guard when the layer counts diverge so fields never silently attach to the wrong node.
 
 ## Packet Index Cache (`app/api/packets.py`)
 - `packets.py` keeps an in-memory LRU cache of parsed `index.json` files keyed by `(path, mtime_ns, size)`.

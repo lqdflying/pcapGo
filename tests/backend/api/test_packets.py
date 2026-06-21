@@ -6,12 +6,14 @@ import uuid
 from pathlib import Path
 
 import pytest
+from sqlalchemy import update as sa_update
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 
 _OFFSET_FMT = struct.Struct("<QQ")
 
 
-def _write_fake_sidecars(index_path: str, summaries: list[dict]):
+def _write_fake_sidecars(index_path: str, summaries: list[dict], linktype: int = 1):
     """Write fake index.json, summary.jsonl, offsets.bin, and .jsonl sidecars.
 
     Replaces the old _write_fake_index_and_jsonl helper with the new binary
@@ -52,7 +54,7 @@ def _write_fake_sidecars(index_path: str, summaries: list[dict]):
 
     index = {
         "total": len(summaries),
-        "linktype": 1,
+        "linktype": linktype,
         "files": {
             "jsonl": jp.name,
             "summary": sp.name,
@@ -400,6 +402,62 @@ class TestPacketDetail:
             data = response.json()
             assert data["idx"] == 0
             assert data["proto"] == "TCP"
+        finally:
+            _cleanup_sidecars(test_capture.parsed_index_path)
+
+    async def test_detail_preserves_zero_linktype_for_raw_hex_enrichment(
+        self, test_client_authenticated, test_capture, _session_engine, tmp_path, monkeypatch
+    ):
+        from app.models import Capture
+
+        stored_path = tmp_path / "capture.pcap"
+        stored_path.write_bytes(b"pcap fallback placeholder")
+        factory = async_sessionmaker(
+            _session_engine, class_=AsyncSession, expire_on_commit=False
+        )
+        async with factory() as session:
+            await session.execute(
+                sa_update(Capture)
+                .where(Capture.id == test_capture.id)
+                .values(linktype=0, stored_path=str(stored_path))
+            )
+            await session.commit()
+
+        summaries = [
+            {
+                "ts": 1.0,
+                "src": "127.0.0.1",
+                "dst": "127.0.0.1",
+                "proto": "LOOP",
+                "length": 4,
+                "info": "loopback",
+                "raw_hex": "00",
+                "layers": [],
+            },
+        ]
+        _write_fake_sidecars(test_capture.parsed_index_path, summaries, linktype=1)
+
+        packet_from_raw_hex_calls = []
+        read_packet_at_calls = []
+
+        def fake_packet_from_raw_hex(raw_hex, linktype):
+            packet_from_raw_hex_calls.append((raw_hex, linktype))
+            return None
+
+        def fake_read_packet_at(stored_path_arg, packet_idx):
+            read_packet_at_calls.append((stored_path_arg, packet_idx))
+            return None
+
+        monkeypatch.setattr("app.api.packets.packet_from_raw_hex", fake_packet_from_raw_hex)
+        monkeypatch.setattr("app.api.packets.read_packet_at", fake_read_packet_at)
+
+        try:
+            response = await test_client_authenticated.get(
+                f"/api/captures/{test_capture.id}/packets/0"
+            )
+            assert response.status_code == 200
+            assert packet_from_raw_hex_calls == [("00", 0)]
+            assert read_packet_at_calls == [(str(stored_path), 0)]
         finally:
             _cleanup_sidecars(test_capture.parsed_index_path)
 

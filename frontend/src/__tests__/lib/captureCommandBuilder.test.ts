@@ -5,6 +5,10 @@ import {
   buildCommand,
   DEFAULT_TCPDUMP_PARAMS,
   DEFAULT_PKTMON_PARAMS,
+  shellQuote,
+  shellQuoteIfNeeded,
+  powershellQuote,
+  powershellQuoteIfNeeded,
   type TcpdumpParams,
   type PktmonParams,
 } from "@/lib/captureCommandBuilder";
@@ -486,5 +490,127 @@ describe("buildCommand", () => {
     const result = buildCommand("pktmon", params);
     expect(result).toBe(buildPktmonCommand(params));
     expect(result).toContain("pktmon start --etw --comp 3");
+  });
+});
+
+// ── Shell escaping (Finding 4) ──────────────────────────────────────────────
+
+describe("shellQuote / shellQuoteIfNeeded", () => {
+  it("leaves safe values unquoted", () => {
+    expect(shellQuoteIfNeeded("eth0")).toBe("eth0");
+    expect(shellQuoteIfNeeded("443")).toBe("443");
+    expect(shellQuoteIfNeeded("192.168.1.1")).toBe("192.168.1.1");
+    expect(shellQuoteIfNeeded("10.0.0.0/8")).toBe("10.0.0.0/8");
+    expect(shellQuoteIfNeeded("capture.pcap")).toBe("capture.pcap");
+  });
+
+  it("returns empty string for empty/whitespace input", () => {
+    expect(shellQuoteIfNeeded("")).toBe("");
+    expect(shellQuoteIfNeeded("   ")).toBe("");
+  });
+
+  it("single-quote-wraps values containing spaces", () => {
+    expect(shellQuoteIfNeeded("my file.pcap")).toBe("'my file.pcap'");
+    expect(shellQuoteIfNeeded("my iface name")).toBe("'my iface name'");
+  });
+
+  it("escapes embedded single quotes (always-quote form)", () => {
+    expect(shellQuote("it's")).toBe("'it'\\''s'");
+  });
+
+  it("escapes embedded single quotes in conditional form when needed", () => {
+    expect(shellQuoteIfNeeded("host 10.0.0.1'")).toBe("'host 10.0.0.1'\\'''");
+  });
+
+  it("shellQuote always wraps, even for safe single words", () => {
+    expect(shellQuote("tcp")).toBe("'tcp'");
+    expect(shellQuote("")).toBe("''");
+  });
+});
+
+describe("powershellQuote / powershellQuoteIfNeeded", () => {
+  it("leaves PowerShell-safe values unquoted", () => {
+    expect(powershellQuoteIfNeeded("capture.etl")).toBe("capture.etl");
+    expect(powershellQuoteIfNeeded("C:\\Temp\\capture.etl")).toBe("C:\\Temp\\capture.etl");
+  });
+
+  it("single-quote-wraps values containing spaces", () => {
+    expect(powershellQuoteIfNeeded("my capture.etl")).toBe("'my capture.etl'");
+  });
+
+  it("escapes embedded single quotes by doubling them", () => {
+    expect(powershellQuote("C:\\Temp\\it's.etl")).toBe("'C:\\Temp\\it''s.etl'");
+    expect(powershellQuoteIfNeeded("C:\\Temp\\it's.etl")).toBe("'C:\\Temp\\it''s.etl'");
+  });
+});
+
+describe("buildTcpdumpCommand — shell escaping", () => {
+  it("quotes an interface name containing a space", () => {
+    const cmd = tcpdump({ iface: "my iface" });
+    expect(cmd).toBe("tcpdump -i 'my iface'");
+  });
+
+  it("quotes a read-file path containing a space", () => {
+    const cmd = tcpdump({ readFile: "my capture.pcap" });
+    expect(cmd).toBe("tcpdump -r 'my capture.pcap'");
+    expect(cmd).not.toContain("-i");
+  });
+
+  it("quotes a write-file path containing a space", () => {
+    const cmd = tcpdump({ writeFile: "out file.pcap" });
+    expect(cmd).toBe("tcpdump -i any -w 'out file.pcap'");
+  });
+
+  it("escapes an embedded single quote in the BPF filter", () => {
+    const cmd = tcpdump({ customBpf: "host 10.0.0.1'" });
+    // The whole expression is one shell arg; the embedded quote is escaped.
+    expect(cmd).toBe("tcpdump -i any 'host 10.0.0.1'\\'''");
+  });
+
+  it("escapes embedded single quotes in host/port/net filters", () => {
+    const cmd = tcpdump({ hostFilter: "10.0.0.1'", hostDirection: "host" });
+    expect(cmd).toBe("tcpdump -i any 'host 10.0.0.1'\\'''");
+  });
+
+  it("keeps the whole BPF expression as one quoted argument with spaces", () => {
+    const cmd = tcpdump({ protocol: "tcp", port: "443" });
+    expect(cmd).toBe("tcpdump -i any 'tcp and port 443'");
+  });
+
+  it("quotes a buffer size value containing a space defensively", () => {
+    const cmd = tcpdump({ bufferSize: "4 096" });
+    expect(cmd).toBe("tcpdump -i any -B '4 096'");
+  });
+});
+
+describe("buildPktmonCommand — shell escaping", () => {
+  it("quotes an IP address containing a space", () => {
+    const cmd = pktmon({ ipAddress: "10.0 0.1" });
+    expect(cmd).toContain("-i '10.0 0.1'");
+  });
+
+  it("quotes a file name containing a space", () => {
+    const cmd = pktmon({ fileName: "my capture.etl" });
+    expect(cmd).toContain("--file-name 'my capture.etl'");
+  });
+
+  it("quotes a component ID containing a space", () => {
+    const cmd = pktmon({ compId: "comp 5" });
+    expect(cmd).toContain("--comp 'comp 5'");
+  });
+
+  it("escapes an embedded single quote in an IP address", () => {
+    const cmd = pktmon({ ipAddress: "10.0.0.1'" });
+    expect(cmd).toContain("-i '10.0.0.1'''");
+  });
+
+  it("escapes embedded single quotes in file names using PowerShell syntax", () => {
+    const cmd = pktmon({ fileName: "C:\\Temp\\it's.etl" });
+    expect(cmd).toContain("--file-name 'C:\\Temp\\it''s.etl'");
+  });
+
+  it("quotes file names with spaces in the etl2pcap comment", () => {
+    const cmd = pktmon({ fileName: "my capture.etl", convertToPcapng: true });
+    expect(cmd).toContain("# pktmon etl2pcap 'my capture.etl' --out 'my capture.pcapng'");
   });
 });

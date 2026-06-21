@@ -37,6 +37,10 @@ export function CaptureCommandAIGenerator({ captureId, onCommandChange }: Props)
     setError(null);
     setResult("");
     setStreaming(true);
+    // Clear any stale command so the preview/copy button doesn't show a value
+    // from a previous generation (or from the Builder mode) while this request
+    // is in flight or if it ultimately yields no extractable command.
+    onCommandChange("");
 
     const controller = new AbortController();
     abortRef.current = controller;

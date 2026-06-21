@@ -1,5 +1,51 @@
 export type Platform = "tcpdump" | "pktmon";
 
+// ── Shell quoting ─────────────────────────────────────────────────────────
+
+// Characters that are safe unquoted in a POSIX shell argument. Values made
+// only of these (e.g. "eth0", "443", "192.168.1.1", "10.0.0.0/8") are left
+// alone so the generated command reads naturally; anything with whitespace,
+// quotes, or shell metacharacters is single-quote-escaped.
+const _POSIX_SAFE_RE = /^[A-Za-z0-9\-_.\/:+,%@]+$/;
+
+// pktmon commands target PowerShell on Windows. Backslash and drive-colon
+// paths are safe unquoted there, but embedded single quotes must use
+// PowerShell's doubled single-quote escape.
+const _POWERSHELL_SAFE_RE = /^[A-Za-z0-9\-_.\\/:+,%@]+$/;
+
+// Always single-quote-wrap a value for safe shell use, escaping embedded
+// single quotes as '\''. Used for the tcpdump BPF filter expression, which is
+// always exactly one shell argument and must stay quoted even when it is a
+// single bare word like "tcp".
+export function shellQuote(value: string): string {
+  const v = value.trim();
+  if (v === "") return "''";
+  return `'${v.replace(/'/g, "'\\''")}'`;
+}
+
+// Quote a shell argument only when it contains characters that would break
+// the command or change its parsing. Returns "" for empty input so callers
+// can push the result directly into an args array.
+export function shellQuoteIfNeeded(value: string): string {
+  const v = value.trim();
+  if (v === "") return "";
+  if (_POSIX_SAFE_RE.test(v)) return v;
+  return shellQuote(v);
+}
+
+export function powershellQuote(value: string): string {
+  const v = value.trim();
+  if (v === "") return "''";
+  return `'${v.replace(/'/g, "''")}'`;
+}
+
+export function powershellQuoteIfNeeded(value: string): string {
+  const v = value.trim();
+  if (v === "") return "";
+  if (_POWERSHELL_SAFE_RE.test(v)) return v;
+  return powershellQuote(v);
+}
+
 // ── tcpdump ──────────────────────────────────────────────────────────────
 
 export interface TcpdumpParams {
@@ -52,20 +98,20 @@ export function buildTcpdumpCommand(params: TcpdumpParams): string {
   const parts: string[] = ["tcpdump"];
 
   if (params.readFile.trim()) {
-    parts.push("-r", params.readFile.trim());
+    parts.push("-r", shellQuoteIfNeeded(params.readFile));
   } else {
-    parts.push("-i", params.iface || "any");
+    parts.push("-i", shellQuoteIfNeeded(params.iface || "any"));
   }
 
-  if (params.count.trim()) parts.push("-c", params.count.trim());
-  if (params.snapLen.trim()) parts.push("-s", params.snapLen.trim());
-  if (params.writeFile.trim()) parts.push("-w", params.writeFile.trim());
+  if (params.count.trim()) parts.push("-c", shellQuoteIfNeeded(params.count));
+  if (params.snapLen.trim()) parts.push("-s", shellQuoteIfNeeded(params.snapLen));
+  if (params.writeFile.trim()) parts.push("-w", shellQuoteIfNeeded(params.writeFile));
   if (params.verbose) parts.push(params.verbose);
   if (params.noDns) parts.push(params.noDns);
   if (params.showAscii) parts.push("-A");
   if (params.hexMode) parts.push(params.hexMode);
   if (params.timestamp) parts.push(params.timestamp);
-  if (params.bufferSize.trim()) parts.push("-B", params.bufferSize.trim());
+  if (params.bufferSize.trim()) parts.push("-B", shellQuoteIfNeeded(params.bufferSize));
   if (params.lineBuffered) parts.push("-l");
 
   const filters: string[] = [];
@@ -79,7 +125,10 @@ export function buildTcpdumpCommand(params: TcpdumpParams): string {
   if (params.customBpf.trim()) filters.push(params.customBpf.trim());
 
   if (filters.length > 0) {
-    parts.push(`'${filters.join(" and ")}'`);
+    // The whole BPF expression is one shell argument; always single-quote it
+    // (with embedded quotes escaped) so values containing spaces or quotes
+    // can't break out of the quoting.
+    parts.push(shellQuote(filters.join(" and ")));
   }
 
   return parts.join(" ");
@@ -131,20 +180,20 @@ export function buildPktmonCommand(params: PktmonParams): string {
 
   if (hasFilter) {
     const filterParts: string[] = ["pktmon filter add"];
-    if (params.ipAddress.trim()) filterParts.push("-i", params.ipAddress.trim());
-    if (params.port.trim()) filterParts.push("-p", params.port.trim());
-    if (params.transport.trim()) filterParts.push("-t", params.transport.trim());
+    if (params.ipAddress.trim()) filterParts.push("-i", powershellQuoteIfNeeded(params.ipAddress));
+    if (params.port.trim()) filterParts.push("-p", powershellQuoteIfNeeded(params.port));
+    if (params.transport.trim()) filterParts.push("-t", powershellQuoteIfNeeded(params.transport));
     lines.push(filterParts.join(" "));
   }
 
   // Start command
   const startParts: string[] = ["pktmon start", "--etw"];
-  if (params.compId.trim()) startParts.push("--comp", params.compId.trim());
-  if (params.fileName.trim()) startParts.push("--file-name", params.fileName.trim());
-  if (params.fileSize.trim()) startParts.push("--file-size", params.fileSize.trim());
-  if (params.logMode.trim()) startParts.push("--log-mode", params.logMode.trim());
-  if (params.packetSize.trim()) startParts.push("-m", params.packetSize.trim());
-  if (params.packetType.trim()) startParts.push("--type", params.packetType.trim());
+  if (params.compId.trim()) startParts.push("--comp", powershellQuoteIfNeeded(params.compId));
+  if (params.fileName.trim()) startParts.push("--file-name", powershellQuoteIfNeeded(params.fileName));
+  if (params.fileSize.trim()) startParts.push("--file-size", powershellQuoteIfNeeded(params.fileSize));
+  if (params.logMode.trim()) startParts.push("--log-mode", powershellQuoteIfNeeded(params.logMode));
+  if (params.packetSize.trim()) startParts.push("-m", powershellQuoteIfNeeded(params.packetSize));
+  if (params.packetType.trim()) startParts.push("--type", powershellQuoteIfNeeded(params.packetType));
   if (params.countersOnly) startParts.push("--counters-only");
   if (params.dropReasons) startParts.push("-d");
   lines.push(startParts.join(" "));
@@ -158,7 +207,7 @@ export function buildPktmonCommand(params: PktmonParams): string {
     const pcapFile = etlFile.replace(/\.etl$/i, ".pcapng");
     lines.push("");
     lines.push("# Convert to pcapng:");
-    lines.push(`# pktmon etl2pcap ${etlFile} --out ${pcapFile}`);
+    lines.push(`# pktmon etl2pcap ${powershellQuoteIfNeeded(etlFile)} --out ${powershellQuoteIfNeeded(pcapFile)}`);
   }
 
   return lines.join("\n");

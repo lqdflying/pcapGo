@@ -7,6 +7,7 @@ import { createMockCapture } from "../test-setup";
 
 // Mock API client
 const mockApiGet = vi.fn();
+const mockStreamExplainPackets = vi.fn();
 
 vi.mock("@/api/client", () => ({
   api: {
@@ -16,7 +17,7 @@ vi.mock("@/api/client", () => ({
   getPacketDetail: vi.fn().mockResolvedValue(null),
   getStatistics: vi.fn().mockResolvedValue(null),
   packetsExportUrl: vi.fn().mockReturnValue("/api/captures/test/export?format=csv"),
-  streamExplainPackets: vi.fn().mockResolvedValue(undefined),
+  streamExplainPackets: (...args: any[]) => mockStreamExplainPackets(...args),
 }));
 
 // Mock store
@@ -144,5 +145,38 @@ describe("CapturePage", () => {
       fireEvent.click(toggleBtn);
     });
     expect(screen.getByText("Capture Command")).toBeInTheDocument();
+  });
+
+  it("surfaces the backend error when Explain fails (e.g. LLM not configured)", async () => {
+    // Simulate the 400 "LLM is not configured on this server" path: the
+    // streamExplainPackets helper reads the response body and forwards the
+    // backend detail to onError. Previously CapturePage passed no onError,
+    // so the spinner just vanished with no user-visible message.
+    mockStreamExplainPackets.mockImplementation(
+      async (_captureId: string, _indices: number[], opts: any) => {
+        opts.onError("LLM is not configured on this server");
+      },
+    );
+
+    // Select a packet so the Explain bar appears.
+    useCaptureStore.setState({
+      selectedPacketIdx: 0,
+      selectedIndices: [0],
+      lastClickedIdx: 0,
+    });
+
+    await act(async () => {
+      renderCapturePage();
+    });
+    await screen.findByText("test.pcap");
+
+    const explainBtn = await screen.findByLabelText("Explain selected packets");
+    await act(async () => {
+      fireEvent.click(explainBtn);
+    });
+
+    expect(
+      await screen.findByText("LLM is not configured on this server"),
+    ).toBeInTheDocument();
   });
 });

@@ -1,19 +1,28 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { useEffect } from "react";
 import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import { CaptureCommandPanel } from "@/components/CaptureCommandPanel";
 
+// The real CaptureCommandBuilder emits its command on mount via useEffect
+// (default tcpdump params → "tcpdump -i any"). The mock mirrors that so the
+// panel tests exercise the realistic mount-emit + tab-switch lifecycle.
 vi.mock("@/components/CaptureCommandBuilder", () => ({
   CaptureCommandBuilder: ({
     onCommandChange,
   }: {
     onCommandChange: (cmd: string) => void;
-  }) => (
-    <div data-testid="builder">
-      <button onClick={() => onCommandChange("tcpdump -i eth0")}>
-        set-cmd
-      </button>
-    </div>
-  ),
+  }) => {
+    useEffect(() => {
+      onCommandChange("tcpdump -i any");
+    }, [onCommandChange]);
+    return (
+      <div data-testid="builder">
+        <button onClick={() => onCommandChange("tcpdump -i eth0")}>
+          set-cmd
+        </button>
+      </div>
+    );
+  },
 }));
 
 vi.mock("@/components/CaptureCommandAIGenerator", () => ({
@@ -67,6 +76,9 @@ describe("CaptureCommandPanel", () => {
 
   it("command preview area not shown when command is empty", () => {
     render(<CaptureCommandPanel />);
+    // Builder emits on mount, so switch to AI mode (which clears the shared
+    // command) to reach the empty-command state.
+    fireEvent.click(screen.getByText("AI Generate"));
     expect(screen.queryByText("Generated Command")).not.toBeInTheDocument();
     expect(screen.queryByText("Copy")).not.toBeInTheDocument();
   });
@@ -121,5 +133,74 @@ describe("CaptureCommandPanel", () => {
     expect(screen.queryByText("Copied!")).not.toBeInTheDocument();
 
     vi.useRealTimers();
+  });
+
+  // ── Stale-command regression (Finding 1) ──────────────────────────────────
+
+  it("switching from Builder to AI clears the stale builder command and hides Copy", () => {
+    render(<CaptureCommandPanel />);
+    // Builder emits "tcpdump -i any" on mount → preview + Copy appear.
+    expect(screen.getByText("Generated Command")).toBeInTheDocument();
+    expect(screen.getByText("tcpdump -i any")).toBeInTheDocument();
+    expect(screen.getByText("Copy")).toBeInTheDocument();
+
+    // Switch to AI tab: the shared command must be cleared so the stale
+    // builder command can't be copied, and the preview/Copy button must hide
+    // until the AI generator produces a new command.
+    fireEvent.click(screen.getByText("AI Generate"));
+    expect(screen.queryByText("Generated Command")).not.toBeInTheDocument();
+    expect(screen.queryByText("tcpdump -i any")).not.toBeInTheDocument();
+    expect(screen.queryByText("Copy")).not.toBeInTheDocument();
+  });
+
+  it("clicking the active Builder tab preserves the current builder command", () => {
+    render(<CaptureCommandPanel />);
+    fireEvent.click(screen.getByText("set-cmd"));
+    expect(screen.getByText("tcpdump -i eth0")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Builder"));
+
+    expect(screen.getByText("Generated Command")).toBeInTheDocument();
+    expect(screen.getByText("tcpdump -i eth0")).toBeInTheDocument();
+    expect(screen.getByText("Copy")).toBeInTheDocument();
+  });
+
+  it("clicking the active AI tab preserves the current AI command", () => {
+    render(<CaptureCommandPanel />);
+    fireEvent.click(screen.getByText("AI Generate"));
+    fireEvent.click(screen.getByText("set-ai-cmd"));
+    expect(screen.getByText("tcpdump -i any 'port 443'")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("AI Generate"));
+
+    expect(screen.getByText("Generated Command")).toBeInTheDocument();
+    expect(screen.getByText("tcpdump -i any 'port 443'")).toBeInTheDocument();
+    expect(screen.getByText("Copy")).toBeInTheDocument();
+  });
+
+  it("switching from AI back to Builder re-emits the builder command", () => {
+    render(<CaptureCommandPanel />);
+    // Move to AI (clears command), then back to Builder (re-mounts and emits).
+    fireEvent.click(screen.getByText("AI Generate"));
+    expect(screen.queryByText("Generated Command")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Builder"));
+    expect(screen.getByText("Generated Command")).toBeInTheDocument();
+    expect(screen.getByText("tcpdump -i any")).toBeInTheDocument();
+    expect(screen.getByText("Copy")).toBeInTheDocument();
+  });
+
+  it("after AI sets a command, switching to Builder clears it then Builder re-emits", () => {
+    render(<CaptureCommandPanel />);
+    fireEvent.click(screen.getByText("AI Generate"));
+    // AI mock produces a command via the set-ai-cmd button.
+    fireEvent.click(screen.getByText("set-ai-cmd"));
+    expect(screen.getByText("tcpdump -i any 'port 443'")).toBeInTheDocument();
+
+    // Switch to Builder: stale AI command must be cleared first.
+    fireEvent.click(screen.getByText("Builder"));
+    expect(screen.queryByText("tcpdump -i any 'port 443'")).not.toBeInTheDocument();
+    // Builder re-emits its own command on mount.
+    expect(screen.getByText("tcpdump -i any")).toBeInTheDocument();
   });
 });

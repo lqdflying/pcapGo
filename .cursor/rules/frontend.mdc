@@ -22,12 +22,13 @@ Runs on `http://localhost:5173`, proxies `/api` and `/auth` to backend at `local
 - `HexViewer` — hex/ASCII dump of selected packet with highlighted layer byte ranges.
 - `StatsTabs` — protocol hierarchy, endpoints (Tx/Rx), conversations, IO graph (bucket/metric controls); click an endpoint/conversation to filter the packet list.
 - `FollowStream` — modal that reconstructs one TCP/UDP conversation's payload (ASCII or hex view), client vs server color-coded; truncation banner when the 1 MB/direction cap is hit.
-- `AIAnalysisPanel` — per-conversation AI diagnostic summaries via SSE; also hosts the chat UI (thread list, message input, Stop button). LLM output is rendered as escaped text (no `dangerouslySetInnerHTML`).
+- `CaptureCommandPanel` — dockable panel that hosts two modes (tabs): `CaptureCommandBuilder` (form-driven tcpdump/pktmon command with shell-escaped args + live preview + Copy) and `CaptureCommandAIGenerator` (natural-language → tcpdump/pktmon command via `/api/capture-command/generate` SSE; optional capture context). Panel keeps a shared `command` state but clears it on tab switch and at AI-generate start so a stale command can't be copied. Can pop out into a `FloatingWindow`.
+- `FloatingWindow` — draggable floating window wrapper used to pop out the Capture Command panel.
 
 ## Pages
 - `Login` — probes `/auth/me` on mount; GitHub OAuth redirect via `/auth/github/login`.
 - `Dashboard` — upload area + captures list with status polling and delete confirmation.
-- `Capture` — 3-pane inspector with view mode toggle (Packets / Statistics / AI Analysis), protocol dropdown, substring search, CSV/JSON export buttons, and Follow Stream launch from a conversation row.
+- `Capture` — 3-pane inspector with view mode toggle (Packets / Statistics), protocol dropdown, substring search, CSV/JSON export buttons, Follow Stream launch from a conversation row, multi-select packets (click / ctrl-click / shift-range) with an "Explain selected packets" bar (one-shot `/explain` SSE), and a right-side Capture Command dock (toggle + pop-out via `FloatingWindow`). AI chat is reached via the Dashboard threads, not a Capture view mode.
 
 ## API Client
 - `frontend/src/api/client.ts` exports an axios instance (`baseURL: "/"`, `withCredentials: true`) and typed helpers for all backend endpoints.
@@ -38,7 +39,9 @@ Runs on `http://localhost:5173`, proxies `/api` and `/auth` to backend at `local
 
 ## State Management
 - `useAuthStore` (Zustand) holds the current `User | null` and `loading` state.
-- `useCaptureStore` (Zustand) holds the selected packet index and protocol filter.
+- `useCaptureStore` (Zustand) holds the selected packet index, multi-select state (`selectedIndices`, `lastClickedIdx`), and protocol filter.
+- `useThemeStore` (Zustand) holds the active theme (`dark` | `light` | `obsidian`) and applies it to `document.documentElement` via `applyTheme` (sets `data-theme`).
+- `useAIDockStore` (Zustand) tracks the Capture Command dock open/pop-out UI state.
 - `src/hooks/` exists as an empty directory; place future custom hooks there, not in `lib/`.
 
 ## Auth Flow
@@ -47,10 +50,11 @@ Runs on `http://localhost:5173`, proxies `/api` and `/auth` to backend at `local
 - `/auth/me` returns current user or 401.
 
 ## Styling
-- Tailwind CSS with a dark theme defined in `tailwind.config.js`.
+- Tailwind CSS with a theme system (`dark` | `light` | `obsidian`) driven by a `data-theme` attribute on `<html>`; `applyTheme` in `useThemeStore` sets it. Theme tokens are defined per-theme in `tailwind.config.js` / `src/index.css`.
 - Color tokens are `panel-bg`, `panel-header`, `panel-border`, `panel-text`, `panel-muted`, `panel-accent`, `panel-success`, `panel-warning`, `panel-error`.
 - Default font is a monospace stack (`JetBrains Mono`, `Fira Code`).
 - Wireshark-style row colors are defined in `src/index.css` (`.tr-tcp`, `.tr-udp`, `.tr-icmp`, `.tr-selected`).
+- `captureCommandBuilder.ts` shell-quotes free-text values (`shellQuote` / `shellQuoteIfNeeded`) so interface/file/path/BPF values with spaces or embedded quotes paste safely into a shell.
 
 ## Build
 ```bash
@@ -66,11 +70,11 @@ cd frontend && npm run typecheck           # App TypeScript check
 cd frontend && npm run typecheck:test      # Test TypeScript check
 ```
 
-Tests live in `frontend/src/__tests__/`, organized by `components/`, `pages/`, `api/`, and `lib/`. 13 test files cover:
-- **Components** (7): Uploader, PacketList, PacketTree, HexViewer, StatsTabs, AIAnalysisPanel, FollowStream
+Tests live in `frontend/src/__tests__/`, organized by `components/`, `pages/`, `api/`, and `lib/`. 16 test files cover:
+- **Components** (10): Uploader, PacketList, PacketTree, HexViewer, StatsTabs, FollowStream, CaptureCommandPanel, CaptureCommandBuilder, CaptureCommandAIGenerator, FloatingWindow
 - **Pages** (3): Login, Dashboard, Capture
 - **App router** (1): routing based on auth state
-- **Pure logic** (2): API client (axios), Zustand stores
+- **Pure logic** (2): API client (axios), Zustand stores, captureCommandBuilder (incl. shell-escaping)
 
 `vitest` config in `vite.config.ts` uses `jsdom`, `globals: true`, and `setupFiles: ["./src/test-setup.ts"]`.
 - `src/test-setup.ts` is a symlink to `src/__tests__/test-setup.ts`; edit the real file in `__tests__/`.
