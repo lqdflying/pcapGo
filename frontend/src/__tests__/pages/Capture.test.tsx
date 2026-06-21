@@ -16,6 +16,7 @@ vi.mock("@/api/client", () => ({
   getPacketDetail: vi.fn().mockResolvedValue(null),
   getStatistics: vi.fn().mockResolvedValue(null),
   packetsExportUrl: vi.fn().mockReturnValue("/api/captures/test/export?format=csv"),
+  streamExplainPackets: vi.fn().mockResolvedValue(undefined),
 }));
 
 // Mock store
@@ -122,5 +123,26 @@ describe("CapturePage", () => {
     expect(screen.getByLabelText("Packets per page")).toBeInTheDocument();
     expect(screen.getByLabelText("Previous page")).toBeInTheDocument();
     expect(screen.getByLabelText("Next page")).toBeInTheDocument();
+  });
+
+  it("shows Terminal icon for capture command panel toggle", async () => {
+    await act(async () => {
+      renderCapturePage();
+    });
+    await screen.findByText("test.pcap");
+    const toggleBtn = screen.getByTitle("Open Capture Command panel");
+    expect(toggleBtn).toBeInTheDocument();
+  });
+
+  it("clicking terminal icon toggles capture command panel", async () => {
+    await act(async () => {
+      renderCapturePage();
+    });
+    await screen.findByText("test.pcap");
+    const toggleBtn = screen.getByTitle("Open Capture Command panel");
+    await act(async () => {
+      fireEvent.click(toggleBtn);
+    });
+    expect(screen.getByText("Capture Command")).toBeInTheDocument();
   });
 });

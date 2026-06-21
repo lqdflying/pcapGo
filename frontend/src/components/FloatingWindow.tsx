@@ -13,13 +13,14 @@ interface Props {
   onChange: (g: Geom) => void;
   onDock: () => void;
   onClose: () => void;
+  title?: string;
   children: ReactNode;
 }
 
 const MIN_W = 320;
 const MIN_H = 240;
 
-export function FloatingWindow({ geom, onChange, onDock, onClose, children }: Props) {
+export function FloatingWindow({ geom, onChange, onDock, onClose, title = "Capture Command", children }: Props) {
   const dragOrigin = useRef<{ sx: number; sy: number; gx: number; gy: number } | null>(null);
   const resizeOrigin = useRef<{ sx: number; sy: number; gw: number; gh: number } | null>(null);
 
@@ -98,7 +99,7 @@ export function FloatingWindow({ geom, onChange, onDock, onClose, children }: Pr
         className="flex shrink-0 cursor-grab items-center justify-between border-b border-panel-border bg-panel-header px-3 py-1.5 active:cursor-grabbing"
         onPointerDown={onDragStart}
       >
-        <span className="text-xs font-medium text-panel-muted">AI Analysis</span>
+        <span className="text-xs font-medium text-panel-muted">{title}</span>
         <div className="flex items-center gap-1">
           <button
             onClick={onDock}

@@ -385,6 +385,36 @@ export async function streamExplainPackets(
   await readSSE(resp, opts.onDelta, opts.onError);
 }
 
+// ── Capture command generation (tcpdump / pktmon) ─────────────────────────────
+
+export async function streamCaptureCommandGenerate(
+  prompt: string,
+  opts: {
+    signal?: AbortSignal;
+    onDelta: (text: string) => void;
+    onError?: (message: string) => void;
+    platform?: "tcpdump" | "pktmon";
+    captureId?: string;
+  }
+): Promise<void> {
+  const body: Record<string, unknown> = { prompt, platform: opts.platform ?? "tcpdump" };
+  if (opts.captureId) {
+    body.capture_id = opts.captureId;
+  }
+  const resp = await fetch("/api/capture-command/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    credentials: "include",
+    signal: opts.signal,
+  });
+  if (!resp.ok || !resp.body) {
+    opts.onError?.("Request failed");
+    return;
+  }
+  await readSSE(resp, opts.onDelta, opts.onError);
+}
+
 export async function getFollowStream(
   captureId: string,
   params: {

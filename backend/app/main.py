@@ -12,7 +12,7 @@ from sqlalchemy import update
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
-from app.api import auth, uploads, packets, statistics, analysis, chat
+from app.api import auth, uploads, packets, statistics, analysis, chat, capture_command
 from app.db.session import engine
 from app.models import Capture, CaptureStatus
 
@@ -78,6 +78,7 @@ app.include_router(packets.router)
 app.include_router(statistics.router)
 app.include_router(analysis.router)
 app.include_router(chat.router)
+app.include_router(capture_command.router)
 
 
 @app.get("/api/health")

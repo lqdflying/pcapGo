@@ -54,6 +54,41 @@ enough information to answer, say so rather than inventing packet details.
 - Be concise and use plain language. Markdown is fine."""
 
 
+TCPDUMP_GEN_SYSTEM_PROMPT = """You are a tcpdump command expert. The user will describe what network traffic they want to capture or analyze, and you generate the correct tcpdump command.
+
+Respond with:
+1. The exact tcpdump command in a fenced code block (```).
+2. A brief explanation of each flag and filter used.
+3. Any caveats or alternatives the user should know about.
+
+Rules:
+- Always use the full tcpdump command starting with 'tcpdump'.
+- Use standard BPF filter syntax.
+- Prefer specific filters over broad ones.
+- If the user's request is ambiguous, pick the most common interpretation and note the alternatives.
+- Be concise."""
+
+
+PKTMON_GEN_SYSTEM_PROMPT = """You are a Windows pktmon (Packet Monitor) command expert. pktmon is available on Windows Server 2019+ and Windows 10 version 1809+. The user will describe what network traffic they want to capture or monitor, and you generate the correct pktmon commands.
+
+Respond with:
+1. The exact pktmon commands in a fenced code block (```), including:
+   - `pktmon filter remove` to clear previous filters
+   - `pktmon filter add` commands for each filter
+   - `pktmon start` with capture options
+   - `pktmon stop` to end capture
+   - `pktmon etl2pcap` to convert the .etl output to .pcapng if applicable
+2. A brief explanation of each parameter used.
+3. Any caveats or alternatives the user should know about.
+
+Rules:
+- pktmon requires Administrator (elevated) privileges.
+- Use --etw flag with pktmon start for packet logging.
+- Output files are in .etl format; mention conversion to .pcapng with `pktmon etl2pcap`.
+- If the user's request is ambiguous, pick the most common interpretation and note the alternatives.
+- Be concise."""
+
+
 EXPLAIN_SYSTEM_PROMPT = """You are a network protocol expert embedded in a Wireshark-like tool. \
 The user has selected one or more packets from a capture and wants you to explain them.
 
@@ -123,6 +158,41 @@ async def chat_stream(
         if role in ("user", "assistant") and content:
             messages.append({"role": role, "content": content})
     messages.append({"role": "user", "content": question})
+
+    stream = await client.chat.completions.create(
+        model=settings.llm_model,
+        messages=messages,
+        temperature=0.3,
+        stream=True,
+    )
+    async for chunk in stream:
+        choices = getattr(chunk, "choices", None)
+        if not choices:
+            continue
+        delta = getattr(choices[0], "delta", None)
+        text = getattr(delta, "content", None) if delta else None
+        if text:
+            yield text
+
+
+async def capture_command_generate_stream(
+    prompt: str,
+    platform: str = "tcpdump",
+    capture_context: str | None = None,
+) -> AsyncIterator[str]:
+    """Stream a capture command (tcpdump or pktmon) based on a natural language prompt."""
+    client = _get_client()
+
+    system_prompt = (
+        PKTMON_GEN_SYSTEM_PROMPT if platform == "pktmon" else TCPDUMP_GEN_SYSTEM_PROMPT
+    )
+    if capture_context:
+        system_prompt = f"{system_prompt}\n\n## Capture context\n{capture_context}"
+
+    messages: list[dict] = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": prompt},
+    ]
 
     stream = await client.chat.completions.create(
         model=settings.llm_model,
