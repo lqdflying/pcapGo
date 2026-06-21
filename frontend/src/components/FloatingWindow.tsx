@@ -20,7 +20,7 @@ interface Props {
 const MIN_W = 320;
 const MIN_H = 240;
 
-export function FloatingWindow({ geom, onChange, onDock, onClose, title = "Capture Command", children }: Props) {
+export function FloatingWindow({ geom, onChange, onDock, onClose, title = "AI Tools", children }: Props) {
   const dragOrigin = useRef<{ sx: number; sy: number; gx: number; gy: number } | null>(null);
   const resizeOrigin = useRef<{ sx: number; sy: number; gw: number; gh: number } | null>(null);
 
@@ -102,6 +102,7 @@ export function FloatingWindow({ geom, onChange, onDock, onClose, title = "Captu
         <span className="text-xs font-medium text-panel-muted">{title}</span>
         <div className="flex items-center gap-1">
           <button
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={onDock}
             title="Dock panel"
             className="rounded p-1 text-panel-muted hover:bg-panel-border hover:text-panel-text"
@@ -109,6 +110,7 @@ export function FloatingWindow({ geom, onChange, onDock, onClose, title = "Captu
             <PanelRight className="h-3.5 w-3.5" />
           </button>
           <button
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={onClose}
             title="Close"
             className="rounded p-1 text-panel-muted hover:bg-panel-error/20 hover:text-panel-error"

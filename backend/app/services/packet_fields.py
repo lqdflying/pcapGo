@@ -82,6 +82,8 @@ def packet_from_raw_hex(raw_hex: str, linktype: int = 1):
         return conf.raw_layer
 
     try:
+        import scapy.layers.l2  # noqa: F401 – registers Ether (DLT 1)
+        import scapy.layers.inet  # noqa: F401 – registers IP dissectors
         from scapy.config import conf
         expects_dissection = linktype_id in _LINKTYPES_EXPECTING_DISSECTION
         # Mirror PcapReader when Scapy's registry is populated. In cold
@@ -132,6 +134,8 @@ def extract_layer_fields(layer) -> list[dict]:
             disp = fd.i2repr(layer, raw_val)
         except Exception:
             disp = str(raw_val)
+        if isinstance(raw_val, bytes) and len(raw_val) == 6 and disp.startswith(("b'", 'b"')):
+            disp = ":".join(f"{b:02x}" for b in raw_val)
         fields.append({
             "name": name,
             "value": disp,

@@ -1,0 +1,213 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Loader2, Send, Square, Trash2 } from "lucide-react";
+import { createChatThread, streamChatMessage, type ChatMessage } from "../api/client";
+import { useCaptureStore } from "../lib/store";
+
+interface Props {
+  captureId: string;
+}
+
+export function AIChatPanel({ captureId }: Props) {
+  const { selectedIndices } = useCaptureStore();
+  const [threadId, setThreadId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [streaming, setStreaming] = useState(false);
+  const [streamingText, setStreamingText] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = useCallback(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+  }, []);
+
+  useEffect(scrollToBottom, [messages, streamingText, scrollToBottom]);
+
+  const sendMessage = useCallback(async () => {
+    const text = input.trim();
+    if (!text || streaming) return;
+
+    setInput("");
+    setError(null);
+    setStreaming(true);
+
+    const userMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: text,
+      created_at: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, userMsg]);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+    let acc = "";
+
+    try {
+      let tid = threadId;
+      if (!tid) {
+        const thread = await createChatThread(captureId);
+        tid = thread.id;
+        setThreadId(tid);
+      }
+
+      setStreamingText("");
+      await streamChatMessage(captureId, tid, text, {
+        signal: controller.signal,
+        packetIndices: selectedIndices.length > 0 ? selectedIndices : undefined,
+        onDelta: (delta) => {
+          acc += delta;
+          setStreamingText(acc);
+        },
+        onError: (msg) => {
+          setError(msg);
+          controller.abort();
+        },
+      });
+    } catch {
+      if (acc === "" && !error) {
+        setError("Chat request failed.");
+      }
+    } finally {
+      setStreaming(false);
+      abortRef.current = null;
+      if (acc) {
+        const assistantMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: acc,
+          created_at: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, assistantMsg]);
+        setStreamingText("");
+      }
+    }
+  }, [input, streaming, threadId, captureId, selectedIndices, error]);
+
+  const stop = () => {
+    abortRef.current?.abort();
+  };
+
+  const clearChat = () => {
+    setMessages([]);
+    setThreadId(null);
+    setStreamingText("");
+    setError(null);
+  };
+
+  return (
+    <div className="flex h-full flex-col">
+      {/* Messages area */}
+      <div ref={scrollRef} className="flex-1 overflow-auto p-3 space-y-3">
+        {messages.length === 0 && !streaming && (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <p className="text-xs text-panel-muted">
+              Ask questions about{" "}
+              {selectedIndices.length > 0
+                ? `${selectedIndices.length} selected packet${selectedIndices.length > 1 ? "s" : ""}`
+                : "your capture"}
+            </p>
+            <p className="mt-1 text-[11px] text-panel-muted/60">
+              e.g. &quot;What protocols are in use?&quot; or &quot;Is there anything suspicious?&quot;
+            </p>
+          </div>
+        )}
+
+        {messages.map((msg) => (
+          <div
+            key={msg.id}
+            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+          >
+            <div
+              className={`max-w-[85%] rounded-lg px-3 py-2 text-xs leading-relaxed ${
+                msg.role === "user"
+                  ? "bg-panel-accent/20 text-panel-text"
+                  : "bg-panel-border/50 text-panel-text"
+              }`}
+            >
+              <pre className="whitespace-pre-wrap font-sans">{msg.content}</pre>
+            </div>
+          </div>
+        ))}
+
+        {streaming && streamingText && (
+          <div className="flex justify-start">
+            <div className="max-w-[85%] rounded-lg bg-panel-border/50 px-3 py-2 text-xs leading-relaxed text-panel-text">
+              <pre className="whitespace-pre-wrap font-sans">{streamingText}</pre>
+            </div>
+          </div>
+        )}
+
+        {streaming && !streamingText && (
+          <div className="flex items-center gap-2 text-xs text-panel-muted">
+            <Loader2 className="h-3 w-3 animate-spin" /> Thinking...
+          </div>
+        )}
+
+        {error && (
+          <p className="text-[11px] text-panel-error">{error}</p>
+        )}
+      </div>
+
+      {/* Selected packets indicator */}
+      {selectedIndices.length > 0 && (
+        <div className="border-t border-panel-border bg-panel-accent/5 px-3 py-1">
+          <span className="text-[11px] text-panel-accent">
+            {selectedIndices.length} packet{selectedIndices.length > 1 ? "s" : ""} selected as context
+          </span>
+        </div>
+      )}
+
+      {/* Input area */}
+      <div className="border-t border-panel-border p-3">
+        <div className="flex gap-2">
+          <textarea
+            aria-label="Ask about packets"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+              }
+            }}
+            rows={2}
+            placeholder="Ask about the selected packets..."
+            className="flex-1 resize-none rounded border border-panel-border bg-panel-bg px-2 py-1.5 text-xs text-panel-text focus:border-panel-accent focus:outline-none"
+          />
+          <div className="flex flex-col gap-1">
+            {streaming ? (
+              <button
+                onClick={stop}
+                aria-label="Stop"
+                className="rounded-lg bg-panel-error/20 p-1.5 text-panel-error hover:bg-panel-error/30"
+              >
+                <Square className="h-3.5 w-3.5" />
+              </button>
+            ) : (
+              <button
+                onClick={sendMessage}
+                disabled={!input.trim()}
+                aria-label="Send"
+                className="rounded-lg bg-panel-accent p-1.5 text-panel-header transition hover:bg-panel-accent/80 disabled:opacity-40"
+              >
+                <Send className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {messages.length > 0 && !streaming && (
+              <button
+                onClick={clearChat}
+                aria-label="New chat"
+                title="New chat"
+                className="rounded-lg p-1.5 text-panel-muted hover:bg-panel-border hover:text-panel-text"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
