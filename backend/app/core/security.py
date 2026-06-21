@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 
 from jose import JWTError, jwt
-from fastapi import Request, HTTPException, status
+from fastapi import Depends, Request, HTTPException, status
 
 from app.config import settings
 
@@ -46,7 +46,8 @@ def clear_jwt_cookie(response):
 
 async def get_current_user(request: Request):
     from app.db.session import async_session
-    from app.models import User
+    from app.models import AllowedUser, User
+    from sqlalchemy import func, select
 
     token = get_jwt_from_cookie(request)
     if not token:
@@ -61,15 +62,33 @@ async def get_current_user(request: Request):
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
+    try:
+        parsed_user_id = uuid.UUID(user_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
     async with async_session() as session:
-        user = await session.get(User, uuid.UUID(user_id))
+        user = await session.get(User, parsed_user_id)
         if not user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+        result = await session.execute(
+            select(AllowedUser).where(
+                func.lower(AllowedUser.github_login) == func.lower(user.login)
+            )
+        )
+        allowed = result.scalar_one_or_none()
+        if not allowed:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not allowed")
+
+        if user.role != allowed.role:
+            user.role = allowed.role
+            await session.commit()
+            await session.refresh(user)
         return user
 
 
-async def require_admin(request: Request):
-    user = await get_current_user(request)
+async def require_admin(user=Depends(get_current_user)):
     if user.role != "super_admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     return user

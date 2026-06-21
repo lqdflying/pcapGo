@@ -18,6 +18,10 @@ vi.mock("@/pages/Capture", () => ({
   CapturePage: () => <div>CapturePage</div>,
 }));
 
+vi.mock("@/pages/Admin", () => ({
+  AdminPage: () => <div>AdminPage</div>,
+}));
+
 // Mock getUser so the App mount probe doesn't make a real HTTP call.
 const mockGetUser = vi.fn();
 vi.mock("@/api/client", () => ({
@@ -106,6 +110,31 @@ describe("App Router", () => {
     await waitFor(() => {
       expect(screen.getByText("CapturePage")).toBeInTheDocument();
     });
+  });
+
+  it("shows admin page at /admin for super admins", async () => {
+    const adminUser = createMockUser({ role: "super_admin" });
+    mockGetUser.mockResolvedValue(adminUser);
+    useAuthStore.setState({ user: adminUser, loading: false });
+    await act(async () => {
+      renderApp("/admin");
+    });
+    await waitFor(() => {
+      expect(screen.getByText("AdminPage")).toBeInTheDocument();
+    });
+  });
+
+  it("redirects normal users away from /admin", async () => {
+    const normalUser = createMockUser({ role: "user" });
+    mockGetUser.mockResolvedValue(normalUser);
+    useAuthStore.setState({ user: normalUser, loading: false });
+    await act(async () => {
+      renderApp("/admin");
+    });
+    await waitFor(() => {
+      expect(screen.getByText("DashboardPage")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("AdminPage")).not.toBeInTheDocument();
   });
 
   it("probes the session on mount via getUser", async () => {

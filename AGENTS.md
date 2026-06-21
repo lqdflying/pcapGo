@@ -13,7 +13,7 @@ docker compose -f tests/docker-compose.yml up -d postgres
 docker inspect --format '{{.State.Health.Status}}' tests-postgres-1   # -> healthy
 
 # 2. Run the suite — MUST be from backend/ with NO path argument
-cd backend && python -m pytest -v          # ✓ 306 passed
+cd backend && python -m pytest -v          # ✓ 348 passed
 
 # 3. Stop PostgreSQL when done
 docker compose -f tests/docker-compose.yml stop postgres
@@ -21,7 +21,7 @@ docker compose -f tests/docker-compose.yml stop postgres
 
 ### Frontend (self-contained, no server needed)
 ```bash
-cd frontend && npx vitest run              # ✓ 251 passed (16 files)
+cd frontend && npx vitest run              # ✓ 278 passed (18 files)
 cd frontend && npm run typecheck           # app typecheck
 cd frontend && npm run typecheck:test      # test typecheck
 ```
@@ -50,8 +50,8 @@ and `backend/pytest.ini` (a sibling, not an ancestor) is never discovered.
 
 | Command (run from `backend/`) | pytest.ini loaded? | Result |
 |---|---|---|
-| `python -m pytest -v` | yes (rootdir=backend) | ✅ 306 passed |
-| `python -m pytest -c pytest.ini ../tests/backend -v` | yes (explicit -c) | ✅ 306 passed |
+| `python -m pytest -v` | yes (rootdir=backend) | ✅ 348 passed |
+| `python -m pytest -c pytest.ini ../tests/backend -v` | yes (explicit -c) | ✅ 348 passed |
 | `python -m pytest ../tests/backend -v` | **no** (rootdir=repo root) | ❌ ~15 failed + ~114 errors |
 
 ### What the wrong command looks like
@@ -101,8 +101,8 @@ PostgreSQL up for any backend run.
 
 | Suite | Expected | Command |
 |---|---|---|
-| Backend | 306 passed, 0 failed | `cd backend && python -m pytest` |
-| Frontend tests | 251 passed, 16 files | `cd frontend && npx vitest run` |
+| Backend | 348 passed, 0 failed | `cd backend && python -m pytest` |
+| Frontend tests | 278 passed, 18 files | `cd frontend && npx vitest run` |
 | Frontend app typecheck | clean | `cd frontend && npm run typecheck` |
 | Frontend test typecheck | clean | `cd frontend && npm run typecheck:test` |
 

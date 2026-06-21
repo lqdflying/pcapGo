@@ -7,6 +7,7 @@ const {
   mockGet,
   mockPost,
   mockDelete,
+  mockPatch,
   interceptorCapture,
   mockAxiosInstance,
   mockCreate,
@@ -14,6 +15,7 @@ const {
   const mockGet = vi.fn();
   const mockPost = vi.fn();
   const mockDelete = vi.fn();
+  const mockPatch = vi.fn();
 
   // Mutable container so the captured interceptor handler can be read in tests.
   const interceptorCapture: { rejected: ((error: unknown) => unknown) | null } = {
@@ -24,6 +26,7 @@ const {
     get: mockGet,
     post: mockPost,
     delete: mockDelete,
+    patch: mockPatch,
     interceptors: {
       response: {
         use: vi.fn((_onFulfilled: unknown, onRejected: unknown) => {
@@ -36,7 +39,7 @@ const {
 
   const mockCreate = vi.fn(() => mockAxiosInstance);
 
-  return { mockGet, mockPost, mockDelete, interceptorCapture, mockAxiosInstance, mockCreate };
+  return { mockGet, mockPost, mockDelete, mockPatch, interceptorCapture, mockAxiosInstance, mockCreate };
 });
 
 vi.mock("axios", () => ({
@@ -57,6 +60,10 @@ import {
   getPackets,
   getPacketDetail,
   getStatistics,
+  listAllowedUsers,
+  addAllowedUser,
+  removeAllowedUser,
+  updateAllowedUserRole,
 } from "@/api/client";
 
 // ── Tests ───────────────────────────────────────────────────────────────────
@@ -68,6 +75,7 @@ describe("API client", () => {
     mockGet.mockClear();
     mockPost.mockClear();
     mockDelete.mockClear();
+    mockPatch.mockClear();
     window.location.href = "";
   });
 
@@ -197,6 +205,61 @@ describe("API client", () => {
 
       expect(mockGet).toHaveBeenCalledWith("/api/captures");
       expect(result).toEqual(mockData);
+    });
+
+    it("passes all-captures and owner filters as query params", async () => {
+      const mockData = { captures: [], total: 0 };
+      mockGet.mockResolvedValue({ data: mockData });
+
+      await listCaptures({ all: true, owner: "alice" });
+
+      expect(mockGet).toHaveBeenCalledWith("/api/captures?all=true&owner=alice");
+    });
+  });
+
+  describe("admin users", () => {
+    it("lists allowed users", async () => {
+      const mockData = { users: [], total: 0 };
+      mockGet.mockResolvedValue({ data: mockData });
+
+      const result = await listAllowedUsers();
+
+      expect(mockGet).toHaveBeenCalledWith("/api/admin/users");
+      expect(result).toEqual(mockData);
+    });
+
+    it("adds an allowed user", async () => {
+      const mockUser = { github_login: "octocat", role: "user" };
+      mockPost.mockResolvedValue({ data: mockUser });
+
+      const result = await addAllowedUser("octocat", "user");
+
+      expect(mockPost).toHaveBeenCalledWith("/api/admin/users", {
+        github_login: "octocat",
+        role: "user",
+      });
+      expect(result).toEqual(mockUser);
+    });
+
+    it("removes an allowed user with URL encoding", async () => {
+      mockDelete.mockResolvedValue({});
+
+      await removeAllowedUser("octo cat");
+
+      expect(mockDelete).toHaveBeenCalledWith("/api/admin/users/octo%20cat");
+    });
+
+    it("updates an allowed user's role", async () => {
+      const mockUser = { github_login: "octocat", role: "super_admin" };
+      mockPatch.mockResolvedValue({ data: mockUser });
+
+      const result = await updateAllowedUserRole("octocat", "super_admin");
+
+      expect(mockPatch).toHaveBeenCalledWith("/api/admin/users/octocat", {
+        github_login: "octocat",
+        role: "super_admin",
+      });
+      expect(result).toEqual(mockUser);
     });
   });
 

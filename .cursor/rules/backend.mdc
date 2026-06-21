@@ -18,10 +18,11 @@ Python 3.12, FastAPI, SQLAlchemy 2 (async), Alembic, Pydantic v2, scapy, python-
 - Alembic migrations use a synchronous driver; `env.py` strips `+asyncpg`/`+psycopg_async` from `DATABASE_URL`.
 
 ## API Routes
-- Prefixes: `/api/captures`, `/api/capture-command`, `/auth`, `/api/health`.
-- Dependencies: `get_current_user` for auth; routes open their own `async_session()` context for DB access.
+- Prefixes: `/api/captures`, `/api/admin`, `/api/capture-command`, `/auth`, `/api/health`.
+- Dependencies: `get_current_user` for auth; it decodes `pcap_session`, loads `User`, re-checks `AllowedUser` by case-insensitive login on every request, rejects removed users with 401, and syncs `User.role` from the allowlist. `require_admin` allows only `super_admin`. Routes open their own `async_session()` context for DB access.
 - Uploads: `POST /api/captures` — validates extensions (.pcap, .pcapng, .cap, plus tcpdump rotated suffixes like `.pcap0`) and pcap magic bytes, streams to a temp file, enforces `max_upload_bytes`, creates the DB record, and spawns `parse_pcap` as a background task.
-- Captures: `GET /api/captures` lists with pagination; `GET /api/captures/{id}` reads one; `DELETE /api/captures/{id}` removes the DB row and best-effort filesystem sidecars (`.index.json`, `.jsonl`, `.summary.jsonl`, `.offsets.bin`) plus evicts the in-memory index AND proto-filter caches.
+- Admin: `GET/POST/PATCH/DELETE /api/admin/users` manages the GitHub login allowlist and role assignment. The seed `ADMIN_GITHUB_USER` is restored as `super_admin` at startup and cannot be deleted or modified through the API.
+- Captures: `GET /api/captures` lists with pagination; normal users see their captures, while `super_admin` users can pass `?all=true` and optional `?owner=<github_login>` to see all captures. `GET /api/captures/{id}` reads one; `DELETE /api/captures/{id}` removes the DB row and best-effort filesystem sidecars (`.index.json`, `.jsonl`, `.summary.jsonl`, `.offsets.bin`) plus evicts the in-memory index AND proto-filter caches.
 - Packets: `GET /api/captures/{id}/packets` reads `index.json`, supports `?proto=`, `?q=` (case-insensitive substring on src/dst/info/proto/app_proto), `?offset=`, `?limit=` (default 200, max 10000; filters apply to `total`). `GET /api/captures/{id}/packets/{packet_idx}` returns full detail from `.jsonl` and enriches each protocol-tree node with Wireshark-parity `fields` (name/value/offset/length) on demand. Enrichment is O(1): the packet is reconstructed from the stored `raw_hex` + the capture `linktype` via `packet_fields.packet_from_raw_hex` (scapy), with `read_packet_at` (full-pcap scan) only as a fallback when `raw_hex` is missing or dissection fails.
 - Follow Stream: `GET /api/captures/{id}/follow` — reconstructs one TCP/UDP conversation's transport payload (query params `src_ip`, `src_port`, `dst_ip`, `dst_port`, `proto` ∈ {tcp,udp}); re-reads the pcap in a worker thread; payload capped at 1 MB per direction; returns base64 segments split by client/server direction.
 - Export: `GET /api/captures/{id}/export?format=csv|json` — streams the (optionally `proto`/`q`-filtered) packet list as CSV or JSON; uses a sync generator run in Starlette's threadpool so large captures never buffer fully in memory.
@@ -38,8 +39,9 @@ Python 3.12, FastAPI, SQLAlchemy 2 (async), Alembic, Pydantic v2, scapy, python-
 - `ChatThread`: id, capture_id (FK cascade, indexed), title (default "New chat", named from the first question), created_at. `messages` relationship ordered by `created_at`, cascades delete.
 - `ChatMessage`: id, thread_id (FK cascade, indexed), role ("user"|"assistant"), content (Text), created_at.
 
-## Models (`app/models/user.py`)
-- `User`: id, github_id (unique), login, email, name, avatar_url, created_at.
+## Models (`app/models/user.py`, `app/models/allowed_user.py`)
+- `User`: id, github_id (unique), login, email, name, avatar_url, role (`user` or `super_admin`), created_at.
+- `AllowedUser`: id, github_login (case-insensitive unique functional index), role (`user` or `super_admin`), added_by, created_at. OAuth callback and request-time auth require this allowlist.
 
 ## Pcap Parser (`app/services/pcap_parser.py`)
 - `parse_pcap(capture_id)` — background task, offloaded via `asyncio.to_thread`.
@@ -72,10 +74,11 @@ Python 3.12, FastAPI, SQLAlchemy 2 (async), Alembic, Pydantic v2, scapy, python-
 
 ## Startup Recovery (`app/main.py`)
 - On startup `_reset_stuck_captures()` flips any capture still in `parsing` status to `failed`, because FastAPI BackgroundTasks do not survive a worker restart.
+- On startup `_ensure_seed_admin()` creates/restores `ADMIN_GITHUB_USER` in `allowed_users` as `super_admin` and syncs any matching existing `users.role`.
 
 ## Settings (`app/config.py`)
 - Pydantic `BaseSettings` with `.env` file support, `extra="ignore"`.
-- Security knobs: `dev_mode` (relaxes secret validation; never in production), `cookie_secure` (default true), `session_secret` (fallback to JWT_SECRET in dev), `jwt_expire_minutes`.
+- Security knobs: `dev_mode` (relaxes secret validation; never in production), `cookie_secure` (default true), `session_secret` (fallback to JWT_SECRET in dev), `jwt_expire_minutes`, `admin_github_user`.
 - Insecure defaults (`CHANGE_ME`, empty, etc.) raise on startup unless `dev_mode=true`.
 
 ## Standalone Frontend Serving (`app/main.py`)

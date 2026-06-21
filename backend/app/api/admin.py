@@ -141,8 +141,6 @@ async def update_allowed_user_role(
             raise HTTPException(status_code=404, detail="User not found in allowlist")
 
         au.role = body.role
-        await session.commit()
-        await session.refresh(au)
 
         # Sync role to the users table if the user has logged in
         user_result = await session.execute(
@@ -152,7 +150,8 @@ async def update_allowed_user_role(
         logged_in = db_user is not None
         if db_user and db_user.role != body.role:
             db_user.role = body.role
-            await session.commit()
+        await session.commit()
+        await session.refresh(au)
 
     return AllowedUserRead(
         id=au.id,

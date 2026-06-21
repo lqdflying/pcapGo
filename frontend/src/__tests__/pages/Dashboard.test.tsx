@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, act, fireEvent } from "@testing-library/react";
+import { render, screen, act, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DashboardPage } from "@/pages/Dashboard";
@@ -154,5 +154,82 @@ describe("DashboardPage", () => {
     });
     expect(mockDeleteCapture).toHaveBeenCalledWith("cap-delete", expect.anything());
     vi.unstubAllGlobals();
+  });
+
+  it("shows admin navigation for super admins", async () => {
+    const adminUser = createMockUser({ role: "super_admin" });
+    useAuthStore.setState({ user: adminUser, loading: false });
+    mockGetUser.mockResolvedValue(adminUser);
+    mockListCaptures.mockResolvedValue({ captures: [], total: 0 });
+    await act(async () => {
+      renderDashboard();
+    });
+    expect(await screen.findByText("Admin")).toBeInTheDocument();
+  });
+
+  it("does not show admin navigation for normal users", async () => {
+    mockListCaptures.mockResolvedValue({ captures: [], total: 0 });
+    await act(async () => {
+      renderDashboard();
+    });
+    await screen.findByText(/no captures yet/i);
+    expect(screen.queryByText("Admin")).not.toBeInTheDocument();
+  });
+
+  it("requests all captures when admin toggles all users", async () => {
+    const adminUser = createMockUser({ role: "super_admin" });
+    useAuthStore.setState({ user: adminUser, loading: false });
+    mockGetUser.mockResolvedValue(adminUser);
+    mockListCaptures.mockResolvedValue({ captures: [], total: 0 });
+    await act(async () => {
+      renderDashboard();
+    });
+
+    fireEvent.click(await screen.findByText("Mine Only"));
+
+    await waitFor(() => {
+      expect(mockListCaptures).toHaveBeenLastCalledWith({ all: true, owner: undefined });
+    });
+    expect(screen.getByText("All Users")).toBeInTheDocument();
+  });
+
+  it("passes owner filter and renders owner login for admin all-captures view", async () => {
+    const adminUser = createMockUser({ role: "super_admin" });
+    useAuthStore.setState({ user: adminUser, loading: false });
+    mockGetUser.mockResolvedValue(adminUser);
+    mockListCaptures
+      .mockResolvedValueOnce({
+        captures: [
+          createMockCapture({
+            id: "cap-owner",
+            filename: "owned.pcap",
+            owner_login: "alice",
+          }),
+        ],
+        total: 1,
+      })
+      .mockResolvedValue({
+        captures: [
+          createMockCapture({
+            id: "cap-owner",
+            filename: "owned.pcap",
+            owner_login: "alice",
+          }),
+        ],
+        total: 1,
+      });
+
+    await act(async () => {
+      renderDashboard();
+    });
+    fireEvent.click(await screen.findByText("Mine Only"));
+    fireEvent.change(await screen.findByPlaceholderText("Filter by username..."), {
+      target: { value: "alice" },
+    });
+
+    await waitFor(() => {
+      expect(mockListCaptures).toHaveBeenLastCalledWith({ all: true, owner: "alice" });
+    });
+    expect(await screen.findByText(/alice/)).toBeInTheDocument();
   });
 });

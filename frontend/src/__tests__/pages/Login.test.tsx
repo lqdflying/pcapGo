@@ -74,6 +74,26 @@ describe("LoginPage", () => {
     expect(mockLoginWithGitHub).toHaveBeenCalledWith("/captures/abc");
   });
 
+  it("preserves search params from location.state.from", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: "/login",
+            state: { from: { pathname: "/captures/abc", search: "?tab=packets" } },
+          },
+        ]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <LoginPage />
+      </MemoryRouter>
+    );
+    await act(async () => {
+      screen.getByText("Sign in with GitHub").click();
+    });
+    expect(mockLoginWithGitHub).toHaveBeenCalledWith("/captures/abc?tab=packets");
+  });
+
   it("passes deep link from ?next= query param", async () => {
     renderLogin("/login?next=/captures/xyz");
     await act(async () => {
@@ -89,5 +109,12 @@ describe("LoginPage", () => {
     });
     // Dangerous values fall back to '/'.
     expect(mockLoginWithGitHub).toHaveBeenCalledWith("/");
+  });
+
+  it("shows not authorized message for rejected GitHub users", () => {
+    renderLogin("/login?auth_error=not_allowed");
+    expect(
+      screen.getByText(/your github account is not authorized/i)
+    ).toBeInTheDocument();
   });
 });

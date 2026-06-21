@@ -222,7 +222,16 @@ def auth_user_data() -> dict[str, Any]:
 
 @pytest_asyncio.fixture
 async def auth_user(_session_engine, auth_user_data):
-    return await _make_user(_session_engine, auth_user_data)
+    user = await _make_user(_session_engine, auth_user_data)
+    await _make_allowed_user(
+        _session_engine,
+        {
+            "github_login": user.login,
+            "role": user.role,
+            "added_by": None,
+        },
+    )
+    return user
 
 
 @pytest.fixture
@@ -321,7 +330,16 @@ def admin_user_data() -> dict[str, Any]:
 
 @pytest_asyncio.fixture
 async def admin_user(_session_engine, admin_user_data):
-    return await _make_user(_session_engine, admin_user_data)
+    user = await _make_user(_session_engine, admin_user_data)
+    await _make_allowed_user(
+        _session_engine,
+        {
+            "github_login": user.login,
+            "role": user.role,
+            "added_by": None,
+        },
+    )
+    return user
 
 
 @pytest_asyncio.fixture

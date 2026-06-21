@@ -15,13 +15,13 @@ pcapGo/
 ├── docker-compose.yml         # SAMPLE: single-container prod compose (copy into a host deploy dir)
 ├── backend/                   # FastAPI (Python 3.12)
 │   ├── app/
-│   │   ├── api/               # Route handlers (auth, uploads, packets, statistics, analysis, chat, capture_command)
+│   │   ├── api/               # Route handlers (auth, admin, uploads, packets, statistics, analysis, chat, capture_command)
 │   │   ├── core/              # Security helpers (JWT cookie auth)
 │   │   ├── db/                # Async engine, session, Base
-│   │   ├── models/            # ORM models (User, Capture, Conversation, Analysis, ChatThread, ChatMessage)
+│   │   ├── models/            # ORM models (User, AllowedUser, Capture, Conversation, Analysis, ChatThread, ChatMessage)
 │   │   ├── schemas/           # Pydantic v2 response models
 │   │   └── services/          # pcap_parser (scapy), flows, follow (stream recon), llm, packet_fields
-│   ├── alembic/               # DB migrations (0001_initial, 0002_chat_threads)
+│   ├── alembic/               # DB migrations (0001_initial, 0002_chat_threads, 0003_user_management)
 │   ├── pytest.ini             # pytest config (testpaths points to ../tests/backend)
 │   ├── Dockerfile             # Backend-only build (test compose)
 │   ├── entrypoint.sh          # Runs alembic upgrade head then starts uvicorn
@@ -56,7 +56,7 @@ pcapGo/
 - **Backend**: Python 3.12, FastAPI, SQLAlchemy 2 (async + asyncpg), Alembic, Pydantic v2, scapy
 - **Database**: PostgreSQL 16
 - **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, TanStack Query, TanStack Virtual
-- **Auth**: GitHub OAuth via authlib + JWT cookie (`pcap_session`) using python-jose
+- **Auth**: GitHub OAuth via authlib + JWT cookie (`pcap_session`) using python-jose; login is gated by the `allowed_users` allowlist and `User.role`
 - **LLM**: OpenAI SDK (configurable base_url for any compatible API)
 - **Infra**: Docker Compose, Nginx
 
@@ -75,8 +75,8 @@ Production mode pulls the pre-built Harbor image, which bundles the React SPA in
 ## Database
 - Engine: `postgresql+asyncpg`
 - Session: `async_sessionmaker` with `expire_on_commit=False`
-- Models: `User`, `Capture` (status enum: uploaded/parsing/ready/failed), `Conversation`, `Analysis`, `ChatThread`, `ChatMessage`
-- Migrations: Alembic in `backend/alembic/` (0001 initial, 0002 chat threads)
+- Models: `User` (role: user/super_admin), `AllowedUser` (case-insensitive GitHub login allowlist), `Capture` (status enum: uploaded/parsing/ready/failed), `Conversation`, `Analysis`, `ChatThread`, `ChatMessage`
+- Migrations: Alembic in `backend/alembic/` (0001 initial, 0002 chat threads, 0003 user management)
 
 ## Key Conventions
 - All Python files start with `from __future__ import annotations`.
@@ -84,8 +84,9 @@ Production mode pulls the pre-built Harbor image, which bundles the React SPA in
 - Uploads are streamed to a temp file, validated by pcap magic bytes, then atomically renamed to `uploads/<user_id>/<capture_id>.pcap`.
 - Parsing runs as a FastAPI `BackgroundTask` and is offloaded to a worker thread with `asyncio.to_thread`. It writes four sidecars: `.jsonl`, `.summary.jsonl`, `.offsets.bin` (binary offset pairs), `.index.json`.
 - Captures never expose `/uploads/` via StaticFiles or nginx; files are served only through authenticated API routes.
-- Auth is cookie-based via `pcap_session` containing a JWT (configurable lifetime via `JWT_EXPIRE_MINUTES`).
-- Every capture-scoped endpoint enforces ownership (`Capture.user_id == user.id`); chat threads additionally check the thread belongs to the capture.
+- Auth is cookie-based via `pcap_session` containing a JWT (configurable lifetime via `JWT_EXPIRE_MINUTES`). Every authenticated request re-checks `allowed_users`; removing a login from the allowlist revokes existing sessions on the next request, and role changes sync into `users.role`.
+- `ADMIN_GITHUB_USER` seeds/restores an undeletable `super_admin` allowlist entry on startup and repairs any matching existing `users.role`.
+- Every capture-scoped endpoint enforces ownership for normal users (`Capture.user_id == user.id`); `super_admin` users can access all captures through shared `get_capture_for_user`. `GET /api/captures?all=true&owner=<github_login>` lists all captures with optional owner filtering.
 - Follow Stream and the proto/`q` packet filter re-read sidecars / the pcap in worker threads (`asyncio.to_thread`) so large reads never block the event loop.
 - `DATABASE_URL` controls the DB connection.
 - Settings are loaded via Pydantic `BaseSettings` with `.env` file support and `extra="ignore"`.
@@ -131,11 +132,11 @@ cd frontend && npm run typecheck:test
 Test DB: `postgresql+asyncpg://pcap:pcap@localhost:5432/pcap_test`
 
 ### Test Coverage Summary
-- **Backend**: 306 tests (unit + integration + migrations) across 26 test files — requires PostgreSQL
-- **Frontend**: 16 test files (251 tests) — self-contained, no server needed
+- **Backend**: 348 tests (unit + integration + migrations) — requires PostgreSQL
+- **Frontend**: 18 test files (278 tests) — self-contained, no server needed
 - **Test frameworks**: pytest + pytest-asyncio (backend), vitest + @testing-library/react (frontend)
 
 ## Environment Variables
-Required: `DATABASE_URL`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_OAUTH_REDIRECT_URL`, `JWT_SECRET`, `PUBLIC_BASE_URL`
+Required: `DATABASE_URL`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_OAUTH_REDIRECT_URL`, `JWT_SECRET`, `PUBLIC_BASE_URL`, `ADMIN_GITHUB_USER`
 Optional: `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`, `MAX_UPLOAD_MB`, `COOKIE_SECURE`, `SESSION_SECRET`, `DEV_MODE`, `JWT_EXPIRE_MINUTES`
 Compose-only: `SERVE_FRONTEND`, `WEB_PORT`, `NGINX_PORT`, `POSTGRES_PASSWORD`

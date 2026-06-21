@@ -26,13 +26,15 @@ Runs on `http://localhost:5173`, proxies `/api` and `/auth` to backend at `local
 - `FloatingWindow` — draggable floating window wrapper used to pop out the Capture Command panel.
 
 ## Pages
-- `Login` — probes `/auth/me` on mount; GitHub OAuth redirect via `/auth/github/login`.
-- `Dashboard` — upload area + captures list with status polling and delete confirmation.
+- `Login` — probes `/auth/me` on mount; GitHub OAuth redirect via `/auth/github/login`; shows `auth_error=not_allowed` when a GitHub login is not in the allowlist and preserves relative deep links including query strings.
+- `Dashboard` — upload area + captures list with status polling and delete confirmation. `super_admin` users see an Admin button and can toggle `all=true` capture listing with optional owner filtering.
+- `Admin` — super-admin-only page at `/admin` for allowed GitHub user CRUD, role changes, seed-admin display, and login status.
 - `Capture` — 3-pane inspector with view mode toggle (Packets / Statistics), protocol dropdown, substring search, CSV/JSON export buttons, Follow Stream launch from a conversation row, multi-select packets (click / ctrl-click / shift-range) with an "Explain selected packets" bar (one-shot `/explain` SSE), and a right-side Capture Command dock (toggle + pop-out via `FloatingWindow`). AI chat is reached via the Dashboard threads, not a Capture view mode.
 
 ## API Client
 - `frontend/src/api/client.ts` exports an axios instance (`baseURL: "/"`, `withCredentials: true`) and typed helpers for all backend endpoints.
 - The axios interceptor hard-redirects to `/login` on 401 unless already on `/login`.
+- Admin helpers are `listAllowedUsers`, `addAllowedUser`, `removeAllowedUser`, and `updateAllowedUserRole`; capture listing accepts `{ all?: boolean; owner?: string }`.
 - Chat streaming uses `fetch` + a `ReadableStream` reader (not `EventSource`, which can't POST) so the caller can pass an `AbortSignal` for the Stop button; SSE frames are split on `\n\n` and `[DONE]` terminates the stream.
 - `packetsExportUrl(...)` builds a direct browser-download URL (cookie auth rides along on the GET) honoring active `proto`/`q` filters.
 - Pages use TanStack Query for data fetching, caching, and invalidation.
@@ -47,7 +49,7 @@ Runs on `http://localhost:5173`, proxies `/api` and `/auth` to backend at `local
 ## Auth Flow
 - GitHub OAuth: redirect to `/auth/github/login`, callback at `/auth/github/callback`.
 - JWT stored in `pcap_session` cookie (httpOnly, secure in production, SameSite=Lax).
-- `/auth/me` returns current user or 401.
+- `/auth/me` returns current allowlisted user with `role` or 401. Removed allowlist users are redirected to login on the next protected request.
 
 ## Styling
 - Tailwind CSS with a theme system (`dark` | `light` | `obsidian`) driven by a `data-theme` attribute on `<html>`; `applyTheme` in `useThemeStore` sets it. Theme tokens are defined per-theme in `tailwind.config.js` / `src/index.css`.
@@ -70,9 +72,9 @@ cd frontend && npm run typecheck           # App TypeScript check
 cd frontend && npm run typecheck:test      # Test TypeScript check
 ```
 
-Tests live in `frontend/src/__tests__/`, organized by `components/`, `pages/`, `api/`, and `lib/`. 16 test files cover:
+Tests live in `frontend/src/__tests__/`, organized by `components/`, `pages/`, `api/`, and `lib/`. 18 test files cover:
 - **Components** (10): Uploader, PacketList, PacketTree, HexViewer, StatsTabs, FollowStream, CaptureCommandPanel, CaptureCommandBuilder, CaptureCommandAIGenerator, FloatingWindow
-- **Pages** (3): Login, Dashboard, Capture
+- **Pages** (4): Login, Dashboard, Admin, Capture
 - **App router** (1): routing based on auth state
 - **Pure logic** (2): API client (axios), Zustand stores, captureCommandBuilder (incl. shell-escaping)
 

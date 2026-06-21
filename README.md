@@ -1,5 +1,9 @@
 # pcapGo
 
+<p align="center">
+  <img src="frontend/public/brand/pcapGo_logo_transparent.png" alt="pcapGo logo" width="360">
+</p>
+
 A self-hosted web application for uploading and analyzing network packet captures (`.pcap` / `.pcapng`). Provides Wireshark-style 3-pane inspection (packet list, protocol tree, hex dump), statistical analysis, and AI-powered per-conversation diagnostics via any OpenAI-compatible LLM.
 
 ## Features
@@ -18,7 +22,7 @@ A self-hosted web application for uploading and analyzing network packet capture
     with persisted conversation threads and a **Stop** button to halt generation
   - **Full analysis** — per-conversation diagnostic summaries and issue detection
     (retransmissions, connection resets, handshake failures, etc.)
-- **GitHub OAuth** authentication (no self-hosted user management needed)
+- **GitHub OAuth + allowlist** authentication with admin-managed GitHub users and roles
 - **Protocol Detection**: TCP, UDP, ICMP, HTTP, TLS, DNS, Redis, MySQL, PostgreSQL (detected by port)
 - **Dark theme** (Catppuccin-inspired)
 
@@ -59,6 +63,7 @@ A self-hosted web application for uploading and analyzing network packet capture
    GITHUB_CLIENT_SECRET=your_github_oauth_client_secret
    GITHUB_OAUTH_REDIRECT_URL=https://YOUR_DOMAIN/auth/github/callback
    PUBLIC_BASE_URL=https://YOUR_DOMAIN
+   ADMIN_GITHUB_USER=your_github_username
    ```
 
 4. **Set up GitHub OAuth App:**
@@ -83,7 +88,7 @@ A self-hosted web application for uploading and analyzing network packet capture
    ```
    Starts PostgreSQL, FastAPI backend, and nginx (serves SPA + proxies API).
 
-6. **Open** `http://localhost` — click "Sign in with GitHub" to authenticate, then upload a `.pcap` file.
+6. **Open** `http://localhost` — sign in as `ADMIN_GITHUB_USER` first, then use **Admin** to add other GitHub usernames before they can log in.
 
 ### Enable AI Analysis
 
@@ -125,6 +130,7 @@ GITHUB_CLIENT_ID=<your-github-oauth-client-id>
 GITHUB_CLIENT_SECRET=<your-github-oauth-client-secret>
 GITHUB_OAUTH_REDIRECT_URL=https://<your-domain>/auth/github/callback
 PUBLIC_BASE_URL=https://<your-domain>
+ADMIN_GITHUB_USER=<your-github-username>
 LLM_API_KEY=<your-llm-key>   # optional
 ```
 
@@ -228,7 +234,7 @@ Three containers from `tests/docker-compose.yml`: PostgreSQL, backend, and nginx
 | Database | PostgreSQL 16 |
 | Parsing | scapy (PcapReader) |
 | Frontend | React 18, TypeScript, Vite, Tailwind CSS, TanStack Query/Virtual |
-| Auth | GitHub OAuth (via authlib) + JWT cookies |
+| Auth | GitHub OAuth (via authlib) + JWT cookies + admin-managed allowlist |
 | LLM | OpenAI SDK (configurable base_url) |
 | Infra | Docker Compose, Nginx |
 
@@ -236,7 +242,7 @@ Three containers from `tests/docker-compose.yml`: PostgreSQL, backend, and nginx
 
 ## Testing
 
-### Backend Tests (250+ tests, pytest + asyncpg)
+### Backend Tests (pytest + asyncpg)
 ```bash
 # Requires PostgreSQL on localhost:5432 with pcap_test database
 cd backend && python -m pytest -v
@@ -244,7 +250,7 @@ cd backend && python -m pytest -v
 
 Tests live in `tests/backend/` (API integration, model CRUD, unit tests, migrations).
 
-### Frontend Tests (13 files, 110+ tests, vitest + jsdom)
+### Frontend Tests (vitest + jsdom)
 ```bash
 cd frontend && npx vitest run
 ```
@@ -269,6 +275,7 @@ docker compose -f tests/docker-compose.yml up -d
 | `GITHUB_OAUTH_REDIRECT_URL` | Yes | OAuth callback URL |
 | `JWT_SECRET` | Yes | Secret for signing JWT tokens |
 | `PUBLIC_BASE_URL` | Yes | Base URL of the deployment |
+| `ADMIN_GITHUB_USER` | Yes | Seed super-admin GitHub username; restored on startup and cannot be deleted |
 | `LLM_BASE_URL` | No | OpenAI-compatible API base URL |
 | `LLM_API_KEY` | No | API key for the LLM (empty = AI disabled) |
 | `LLM_MODEL` | No | Model name to use |

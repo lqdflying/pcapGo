@@ -39,7 +39,16 @@ class TestMigration0001:
         """Users table should have all expected columns."""
         table = Base.metadata.tables["users"]
         column_names = {c.name for c in table.columns}
-        expected = {"id", "github_id", "login", "email", "name", "avatar_url", "created_at"}
+        expected = {
+            "id",
+            "github_id",
+            "login",
+            "email",
+            "name",
+            "avatar_url",
+            "role",
+            "created_at",
+        }
         assert expected.issubset(column_names)
 
     def test_captures_table_columns(self):
@@ -195,3 +204,37 @@ class TestMigration0002:
         )
         fk_cols = [c.name for c in table.columns if c.foreign_keys]
         assert "thread_id" in fk_cols
+
+
+class TestMigration0003:
+    """The user-management migration must define roles and allowlist metadata."""
+
+    def test_migration_version_exists(self):
+        root = Path(__file__).parent.parent.parent
+        migration_path = (
+            root / "backend" / "alembic" / "versions" / "0003_user_management.py"
+        )
+        assert migration_path.exists()
+
+    def test_allowed_users_table_defined_in_metadata(self):
+        table_names = set(Base.metadata.tables.keys())
+        assert "allowed_users" in table_names
+
+    def test_allowed_users_columns(self):
+        table = Base.metadata.tables["allowed_users"]
+        column_names = {c.name for c in table.columns}
+        assert {"id", "github_login", "role", "added_by", "created_at"}.issubset(
+            column_names
+        )
+
+    def test_users_role_column(self):
+        table = Base.metadata.tables["users"]
+        assert "role" in {c.name for c in table.columns}
+
+    def test_allowed_users_lower_login_unique_index(self):
+        table = Base.metadata.tables["allowed_users"]
+        indexes = {idx.name: idx for idx in table.indexes}
+        index = indexes.get("ix_allowed_users_github_login_lower")
+        assert index is not None
+        assert index.unique is True
+        assert "lower" in str(index.expressions[0]).lower()

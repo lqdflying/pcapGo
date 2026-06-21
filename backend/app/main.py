@@ -14,7 +14,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.config import settings
 from app.api import auth, uploads, packets, statistics, analysis, chat, capture_command, admin
 from app.db.session import engine
-from app.models import Capture, CaptureStatus, AllowedUser
+from app.models import Capture, CaptureStatus, AllowedUser, User
 
 logger = logging.getLogger(__name__)
 
@@ -61,12 +61,20 @@ async def _ensure_seed_admin() -> None:
                 role="super_admin",
                 added_by=None,
             ))
-            await session.commit()
             logger.info("Seeded admin user: %s", settings.admin_github_user)
         elif existing.role != "super_admin":
             existing.role = "super_admin"
-            await session.commit()
             logger.info("Restored super_admin role for seed admin: %s", settings.admin_github_user)
+
+        user_result = await session.execute(
+            select(User).where(func.lower(User.login) == func.lower(settings.admin_github_user))
+        )
+        db_user = user_result.scalar_one_or_none()
+        if db_user and db_user.role != "super_admin":
+            db_user.role = "super_admin"
+            logger.info("Restored users.role for seed admin: %s", settings.admin_github_user)
+
+        await session.commit()
 
 
 @asynccontextmanager

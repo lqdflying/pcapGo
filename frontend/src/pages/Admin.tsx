@@ -29,7 +29,7 @@ export function AdminPage() {
   const [newRole, setNewRole] = useState<"user" | "super_admin">("user");
   const [error, setError] = useState<string | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["admin", "users"],
     queryFn: listAllowedUsers,
   });
@@ -49,7 +49,10 @@ export function AdminPage() {
 
   const deleteMut = useMutation({
     mutationFn: removeAllowedUser,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin", "users"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      setError(null);
+    },
     onError: (err: any) => {
       setError(err.response?.data?.detail || "Failed to remove user");
     },
@@ -58,7 +61,10 @@ export function AdminPage() {
   const updateRoleMut = useMutation({
     mutationFn: ({ login, role }: { login: string; role: string }) =>
       updateAllowedUserRole(login, role),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin", "users"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      setError(null);
+    },
     onError: (err: any) => {
       setError(err.response?.data?.detail || "Failed to update role");
     },
@@ -163,6 +169,10 @@ export function AdminPage() {
 
         {isLoading ? (
           <p className="text-sm text-panel-muted">Loading...</p>
+        ) : isError ? (
+          <p className="text-sm text-panel-error">
+            Failed to load allowed users. Please try again.
+          </p>
         ) : !data?.users?.length ? (
           <p className="text-sm text-panel-muted">
             No users configured. Add a GitHub username above.
@@ -212,6 +222,7 @@ export function AdminPage() {
                     <>
                       <select
                         value={au.role}
+                        disabled={updateRoleMut.isPending}
                         onChange={(e) =>
                           updateRoleMut.mutate({
                             login: au.github_login,

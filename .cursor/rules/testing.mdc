@@ -21,7 +21,8 @@ tests/backend/
 ├── api/            # Integration tests (httpx.AsyncClient + ASGITransport)
 │   ├── test_uploads.py / test_packets.py / test_statistics.py
 │   ├── test_analysis.py / test_chat.py / test_follow.py / test_export.py
-│   └── test_capture_command.py   # POST /api/capture-command/generate (LLM-gated SSE)
+│   ├── test_capture_command.py   # POST /api/capture-command/generate (LLM-gated SSE)
+│   └── test_admin.py             # allowlist/admin API, role sync, revocation, admin capture listing
 ├── models/         # Model CRUD tests (SQLAlchemy async sessions)
 ├── services/       # Service-level tests (currently empty)
 ├── unit/           # Pure unit tests (no DB)
@@ -39,6 +40,7 @@ tests/backend/
 - **Session-scoped async engine** shared between app and test fixtures via patching `app.db.session`.
 - **Per-test isolation**: `_delete_all` fixture runs `DELETE FROM` all tables in reverse dependency order before each test.
 - **Unique test data**: counter-based `github_id`/`login` in `auth_user_data` prevents collisions.
+- **Allowlisted auth fixtures**: `auth_user` and `admin_user` create matching `AllowedUser` rows because `get_current_user` re-checks the allowlist on every request.
 - **`parse_pcap` mocked** via `monkeypatch` on `app.api.uploads.parse_pcap` to prevent background task interference.
 - **httpx.AsyncClient** with `ASGITransport` (not Starlette TestClient) to avoid event-loop conflicts.
 - **pytest-asyncio config**: `asyncio_mode=auto`, both loop scopes set to `session`.
@@ -85,13 +87,13 @@ cd frontend && npm run typecheck
 cd frontend && npm run typecheck:test
 ```
 
-### Test Structure (16 test files under `frontend/src/__tests__/`)
+### Test Structure (18 test files under `frontend/src/__tests__/`)
 ```
 frontend/src/__tests__/
 ├── test-setup.ts                       # Global mocks + mock data factories
 ├── App.test.tsx                        # Router + auth routing integration
 ├── api/
-│   └── client.test.ts                 # Axios API client + 401 interceptor
+│   └── client.test.ts                 # Axios API client + 401 interceptor + admin helpers
 ├── lib/
 │   ├── store.test.ts                  # Zustand stores (useAuthStore, useCaptureStore, useThemeStore, useAIDockStore)
 │   └── captureCommandBuilder.test.ts  # tcpdump/pktmon command builder + shell escaping (shellQuote)
@@ -107,8 +109,9 @@ frontend/src/__tests__/
 │   ├── CaptureCommandAIGenerator.test.tsx # AI prompt → SSE streaming + extract command
 │   └── FloatingWindow.test.tsx        # Draggable floating window wrapper
 └── pages/
-    ├── Login.test.tsx                 # Unauthenticated redirect to GitHub
-    ├── Dashboard.test.tsx             # Upload + captures list + delete confirmation
+    ├── Login.test.tsx                 # Unauthenticated redirect to GitHub + not_allowed copy
+    ├── Dashboard.test.tsx             # Upload + captures list + admin all-captures controls + delete confirmation
+    ├── Admin.test.tsx                 # Allowed-user CRUD and role-management UI
     └── Capture.test.tsx               # 3-pane inspector + view toggle + Explain error surfacing + command dock
 ```
 

@@ -1,6 +1,7 @@
 """Integration tests for /auth endpoints: /me and /logout."""
 
 import pytest
+from sqlalchemy import select
 
 
 @pytest.mark.integration
@@ -50,6 +51,105 @@ class TestGitHubLoginNextValidation:
         from app.api.auth import _validate_next
         assert _validate_next("/") == "/"
         assert _validate_next("/captures/abc") == "/captures/abc"
+
+
+@pytest.mark.integration
+class TestGitHubCallbackAllowlist:
+    async def test_rejects_user_not_in_allowlist(self, test_client, monkeypatch):
+        import app.api.auth
+
+        async def fake_authorize_access_token(request):
+            return {"access_token": "token"}
+
+        class FakeResponse:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {
+                    "id": 111,
+                    "login": "not-allowed",
+                    "email": "not@example.com",
+                    "name": "Not Allowed",
+                    "avatar_url": "https://avatar.example.com/not.png",
+                }
+
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return None
+
+            async def get(self, *args, **kwargs):
+                return FakeResponse()
+
+        monkeypatch.setattr(
+            app.api.auth.oauth.github,
+            "authorize_access_token",
+            fake_authorize_access_token,
+        )
+        monkeypatch.setattr(app.api.auth, "AsyncClient", FakeClient)
+
+        response = await test_client.get("/auth/github/callback", follow_redirects=False)
+        assert response.status_code == 307
+        assert response.headers["location"] == "/login?auth_error=not_allowed"
+
+    async def test_allows_and_syncs_allowlisted_role(
+        self, test_client, monkeypatch, _session_engine
+    ):
+        import app.api.auth
+        from app.models import User
+        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+        from tests.backend.conftest import _make_allowed_user
+
+        await _make_allowed_user(
+            _session_engine,
+            {"github_login": "allowed-admin", "role": "super_admin", "added_by": None},
+        )
+
+        async def fake_authorize_access_token(request):
+            return {"access_token": "token"}
+
+        class FakeResponse:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {
+                    "id": 112,
+                    "login": "allowed-admin",
+                    "email": "allowed@example.com",
+                    "name": "Allowed Admin",
+                    "avatar_url": "https://avatar.example.com/allowed.png",
+                }
+
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return None
+
+            async def get(self, *args, **kwargs):
+                return FakeResponse()
+
+        monkeypatch.setattr(
+            app.api.auth.oauth.github,
+            "authorize_access_token",
+            fake_authorize_access_token,
+        )
+        monkeypatch.setattr(app.api.auth, "AsyncClient", FakeClient)
+
+        response = await test_client.get("/auth/github/callback", follow_redirects=False)
+        assert response.status_code == 307
+        assert response.headers["location"] == "/"
+        assert "pcap_session=" in response.headers.get("set-cookie", "")
+
+        factory = async_sessionmaker(_session_engine, class_=AsyncSession, expire_on_commit=False)
+        async with factory() as session:
+            result = await session.execute(select(User).where(User.github_id == 112))
+            assert result.scalar_one().role == "super_admin"
 
 
 @pytest.mark.integration

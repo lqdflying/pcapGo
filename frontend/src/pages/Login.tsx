@@ -11,9 +11,20 @@ export function LoginPage() {
   // App's protected-route Navigate) or a ?next= query param (set by the 401
   // interceptor or external OAuth redirect). Validate it is relative.
   function getRedirectTarget(): string {
-    const fromState = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
-    if (fromState && fromState.startsWith("/") && !fromState.startsWith("//")) {
-      return fromState;
+    const fromState = (location.state as { from?: { pathname?: string; search?: string } } | null)?.from;
+    const fromPath = fromState?.pathname
+      ? `${fromState.pathname}${fromState.search ?? ""}`
+      : null;
+    if (fromPath && fromPath.startsWith("/") && !fromPath.startsWith("//")) {
+      return fromPath;
+    }
+    const fromStatePathname = fromState?.pathname;
+    if (
+      fromStatePathname
+      && fromStatePathname.startsWith("/")
+      && !fromStatePathname.startsWith("//")
+    ) {
+      return fromStatePathname;
     }
     const params = new URLSearchParams(location.search);
     const nextParam = params.get("next");
@@ -34,21 +45,11 @@ export function LoginPage() {
     <div className="flex h-full items-center justify-center bg-panel-bg">
       <div className="w-full max-w-md rounded-2xl border border-panel-border bg-panel-header p-10 text-center shadow-2xl">
         <div className="mb-6 flex justify-center">
-          <div className="rounded-xl bg-panel-accent/10 p-3">
-            <svg
-              className="h-12 w-12 text-panel-accent"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M9 12h6m-3-3v6m-7 3h14a1 1 0 001-1V7a1 1 0 00-1-1H5a1 1 0 00-1 1v10a1 1 0 001 1z"
-              />
-            </svg>
-          </div>
+          <img
+            src="/brand/pcapGo_logo_transparent_square.png"
+            alt="pcapGo logo"
+            className="h-20 w-20 rounded-2xl object-contain"
+          />
         </div>
         <h1 className="mb-2 text-2xl font-semibold text-panel-text">
           pcapGo

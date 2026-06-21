@@ -120,9 +120,16 @@ export function DashboardPage() {
     <div className="flex h-full flex-col bg-panel-bg">
       {/* Header */}
       <header className="flex items-center justify-between border-b border-panel-border bg-panel-header px-6 py-3">
-        <div>
-          <h1 className="text-lg font-semibold text-panel-text">pcapGo</h1>
-          <p className="text-xs text-panel-muted">Packet Capture Inspector</p>
+        <div className="flex items-center gap-3">
+          <img
+            src="/brand/pcapGo_logo_transparent_square.png"
+            alt="pcapGo logo"
+            className="h-9 w-9 object-contain"
+          />
+          <div>
+            <h1 className="text-lg font-semibold text-panel-text">pcapGo</h1>
+            <p className="text-xs text-panel-muted">Packet Capture Inspector</p>
+          </div>
         </div>
         <div className="flex items-center gap-4">
           {user && (
