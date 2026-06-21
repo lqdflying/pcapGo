@@ -38,6 +38,7 @@ def read_packet_at(stored_path: str, idx: int):
     if not path.exists():
         return None
     try:
+        import app.services.scapy_layers  # noqa: F401 – registers all protocol dissectors
         from scapy.utils import PcapReader
         with PcapReader(str(path)) as reader:
             for i, pkt in enumerate(reader):

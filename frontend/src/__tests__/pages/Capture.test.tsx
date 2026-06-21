@@ -94,7 +94,12 @@ describe("CapturePage", () => {
     await act(async () => {
       renderCapturePage();
     });
-    expect(screen.getByLabelText("Filter by protocol")).toBeInTheDocument();
+    const select = screen.getByLabelText("Filter by protocol");
+    expect(select).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "DHCP" })).toHaveValue("dhcp");
+    expect(screen.getByRole("option", { name: "NTP" })).toHaveValue("ntp");
+    expect(screen.getByRole("option", { name: "NetBIOS" })).toHaveValue("netbios");
+    expect(screen.getByRole("option", { name: "RADIUS" })).toHaveValue("radius");
   });
 
   it("shows the packet search box and CSV export link in packets view", async () => {
