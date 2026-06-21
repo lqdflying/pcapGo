@@ -46,9 +46,9 @@ export function LoginPage() {
       <div className="w-full max-w-md rounded-2xl border border-panel-border bg-panel-header p-10 text-center shadow-2xl">
         <div className="mb-6 flex justify-center">
           <img
-            src="/brand/pcapGo_logo_transparent_square.png"
+            src="/brand/pcapGo_logo_transparent.png"
             alt="pcapGo logo"
-            className="h-20 w-20 rounded-2xl object-contain"
+            className="h-24 w-64 object-contain"
           />
         </div>
         <h1 className="mb-2 text-2xl font-semibold text-panel-text">

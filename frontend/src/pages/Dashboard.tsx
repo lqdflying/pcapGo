@@ -122,9 +122,9 @@ export function DashboardPage() {
       <header className="flex items-center justify-between border-b border-panel-border bg-panel-header px-6 py-3">
         <div className="flex items-center gap-3">
           <img
-            src="/brand/pcapGo_logo_transparent_square.png"
+            src="/brand/pcapGo_logo_transparent.png"
             alt="pcapGo logo"
-            className="h-9 w-9 object-contain"
+            className="h-10 w-28 object-contain"
           />
           <div>
             <h1 className="text-lg font-semibold text-panel-text">pcapGo</h1>

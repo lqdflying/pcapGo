@@ -22,7 +22,7 @@ Harbor enforces Cosign content trust — every published image MUST be signed be
 
 ## Versioning & Tags
 - **Git-tag-driven**. A release tag has the form `v<semver>` (e.g. `v0.2.0`).
-- **Never rewrite any existing tag**: before building or pushing, check both Git tags and Harbor tags. If the current highest tag is `0.3.3` / `v0.3.3`, the next image MUST be `0.3.4` / `v0.3.4`; do not rebuild, re-push, move, or overwrite an existing full-semver tag. This applies to test images and GA releases.
+- **Always publish a new full-semver tag**: before building or pushing, check both Git tags and Harbor tags. If the current highest tag is `0.3.4` / `v0.3.4`, the next image MUST be `0.3.5` / `v0.3.5`. Never rebuild, re-push, move, or overwrite an existing full-semver tag. This applies to test images and GA releases.
 - Each release produces **four Harbor tags** for one image (same manifest/digest):
   - `img.aksg.net/pcapgo/pcapgo:<version>` (e.g. `0.2.0`) — **bug-fix / full-semver tag**, immutable, one per release. Never re-push a version tag.
   - `img.aksg.net/pcapgo/pcapgo:<minor>` (e.g. `0.2`) — **minor rolling tag**, mutable, always points at the newest `0.2.x` release. Re-pushed on every `0.2.x` release.
@@ -35,7 +35,7 @@ Harbor enforces Cosign content trust — every published image MUST be signed be
 - **The triad must correspond**: the git tag `v0.2.0`, the Harbor `0.2.0` tag, and the source code state (the commit) must all refer to the same code. Build the image from the exact commit you tag. The rolling tags (`0.2`, `0`, `latest`) are *not* part of the triad — they're convenience pointers that follow the immutable tag.
 - **GitHub tag prerequisite**: the local branch MUST have commits before you can tag (`git tag` fails on a branch with no commits). Commit + push the working tree first, then tag.
 - **History note**: the four-tag policy starts at `v0.2.0`. The prior release `v0.0.1` was published under the two-tag policy (`0.0.1` + `latest` only) and therefore has no `0` or `0.0` rolling tag in Harbor.
-- **Testing builds use formal patch tags**: do NOT push ad-hoc tags such as `test-*` for user testing. Publish the next unused full-semver patch tag instead (for example `0.3.3` → `0.3.4`) and re-point the rolling `0.3`, `0`, and `latest` tags to the same digest. If testing finds another bug, fix it and publish the next patch tag again.
+- **Testing builds use formal patch tags + latest**: do NOT push ad-hoc tags such as `test-*` for user testing. Publish the next unused full-semver patch tag instead (for example `0.3.4` → `0.3.5`) and always tag/push `latest` to the same digest so testers who pull `latest` receive the newest test image. If testing finds another bug, fix it and publish the next patch tag again.
 - **GA is user-gated**: after a formal patch image is built and pushed for testing, wait for the user to explicitly say "GA" before committing/pushing code or wiki changes. On GA, commit and push all relevant main-repo code changes and wiki-repo documentation changes, then create and push the Git tag that matches the tested full-semver Docker image tag exactly (for example image `0.3.2` -> Git tag `v0.3.2`; never tag from `latest`).
 
 ## Base Images — Always Pull Latest
