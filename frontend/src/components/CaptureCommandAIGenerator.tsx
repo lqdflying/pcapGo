@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { Loader2, Send, Square } from "lucide-react";
 import { streamCaptureCommandGenerate } from "../api/client";
 import type { Platform } from "../lib/captureCommandBuilder";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   captureId?: string;
@@ -22,6 +23,7 @@ function extractCommand(text: string): string {
 }
 
 export function CaptureCommandAIGenerator({ captureId, onCommandChange }: Props) {
+  const { t } = useTranslation();
   const [platform, setPlatform] = useState<Platform>("tcpdump");
   const [prompt, setPrompt] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -80,7 +82,7 @@ export function CaptureCommandAIGenerator({ captureId, onCommandChange }: Props)
         {/* Platform selector */}
         <div>
           <label className="text-[11px] font-medium text-panel-muted">
-            Platform
+            {t("captureCommand.platform")}
           </label>
           <select
             aria-label="Platform"
@@ -88,8 +90,8 @@ export function CaptureCommandAIGenerator({ captureId, onCommandChange }: Props)
             onChange={(e) => setPlatform(e.target.value as Platform)}
             className="w-full rounded border border-panel-border bg-panel-bg px-2 py-1 text-xs text-panel-text focus:border-panel-accent focus:outline-none"
           >
-            <option value="tcpdump">tcpdump (Linux/macOS)</option>
-            <option value="pktmon">pktmon (Windows)</option>
+            <option value="tcpdump">{t("captureCommand.tcpdumpPlatform")}</option>
+            <option value="pktmon">{t("captureCommand.pktmonPlatform")}</option>
           </select>
         </div>
 
@@ -102,14 +104,14 @@ export function CaptureCommandAIGenerator({ captureId, onCommandChange }: Props)
               onChange={(e) => setUseContext(e.target.checked)}
               className="rounded border-panel-border accent-[rgb(var(--panel-accent))]"
             />
-            Use capture context
+            {t("captureCommand.useCaptureContext")}
           </label>
         )}
 
         {/* Prompt */}
         <div>
           <label className="text-[11px] font-medium text-panel-muted">
-            Describe what you want to capture
+            {t("captureCommand.describeCapture")}
           </label>
           <textarea
             aria-label="Describe capture"
@@ -124,8 +126,8 @@ export function CaptureCommandAIGenerator({ captureId, onCommandChange }: Props)
             rows={3}
             placeholder={
               platform === "tcpdump"
-                ? 'e.g. "Capture all HTTPS traffic to example.com on eth0"'
-                : 'e.g. "Monitor dropped packets on adapter 5"'
+                ? t("captureCommand.tcpdumpPlaceholder")
+                : t("captureCommand.pktmonPlaceholder")
             }
             className="w-full resize-none rounded border border-panel-border bg-panel-bg px-2 py-1.5 text-xs text-panel-text focus:border-panel-accent focus:outline-none"
           />
@@ -139,7 +141,7 @@ export function CaptureCommandAIGenerator({ captureId, onCommandChange }: Props)
               aria-label="Stop"
               className="inline-flex items-center gap-1 rounded-lg bg-panel-error/20 px-3 py-1.5 text-xs font-medium text-panel-error hover:bg-panel-error/30"
             >
-              <Square className="h-3 w-3" /> Stop
+              <Square className="h-3 w-3" /> {t("common.stop")}
             </button>
           ) : (
             <button
@@ -148,7 +150,7 @@ export function CaptureCommandAIGenerator({ captureId, onCommandChange }: Props)
               aria-label="Generate"
               className="inline-flex items-center gap-1 rounded-lg bg-panel-accent px-3 py-1.5 text-xs font-medium text-panel-header transition hover:bg-panel-accent/80 disabled:opacity-40"
             >
-              <Send className="h-3 w-3" /> Generate
+              <Send className="h-3 w-3" /> {t("common.generate")}
             </button>
           )}
         </div>
@@ -167,7 +169,7 @@ export function CaptureCommandAIGenerator({ captureId, onCommandChange }: Props)
             </pre>
           ) : (
             <div className="flex items-center gap-2 text-xs text-panel-muted">
-              <Loader2 className="h-3 w-3 animate-spin" /> Generating...
+              <Loader2 className="h-3 w-3 animate-spin" /> {t("common.generating")}
             </div>
           )}
         </div>

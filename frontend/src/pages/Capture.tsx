@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import {
   ArrowLeft,
@@ -16,6 +17,7 @@ import {
   Sparkles,
   Square,
   X,
+  Languages,
 } from "lucide-react";
 import {
   getPackets,
@@ -29,7 +31,7 @@ import {
   type ConversationStats,
 } from "../api/client";
 import { api } from "../api/client";
-import { useCaptureStore, useThemeStore, useAIDockStore, type Theme } from "../lib/store";
+import { useCaptureStore, useThemeStore, useLanguageStore, useAIDockStore, type Theme, type Language } from "../lib/store";
 import { PacketList } from "../components/PacketList";
 import { PacketTree } from "../components/PacketTree";
 import { HexViewer } from "../components/HexViewer";
@@ -39,8 +41,8 @@ import { FloatingWindow } from "../components/FloatingWindow";
 import { FollowStream } from "../components/FollowStream";
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200, 500];
-const PROTOCOL_OPTIONS = [
-  { value: "", label: "All" },
+const PROTOCOL_OPTIONS: { value: string; label?: string; labelKey?: string }[] = [
+  { value: "", labelKey: "capture.all" },
   { value: "tcp", label: "TCP" },
   { value: "udp", label: "UDP" },
   { value: "icmp", label: "ICMP" },
@@ -69,7 +71,13 @@ const PROTOCOL_OPTIONS = [
   { value: "postgresql", label: "PostgreSQL" },
 ];
 
+const LANGUAGES: { value: Language; label: string }[] = [
+  { value: "en", label: "English" },
+  { value: "zh", label: "中文" },
+];
+
 export function CapturePage() {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const {
@@ -80,6 +88,7 @@ export function CapturePage() {
     setFilterProto,
   } = useCaptureStore();
   const { theme, setTheme } = useThemeStore();
+  const { language, setLanguage } = useLanguageStore();
   const {
     aiDockOpen,
     aiPoppedOut,
@@ -106,8 +115,8 @@ export function CapturePage() {
   const explainAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    const t = setTimeout(() => setAppliedSearch(search), 300);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setAppliedSearch(search), 300);
+    return () => clearTimeout(timer);
   }, [search]);
 
   const captureQuery = useQuery<Capture>({
@@ -198,16 +207,14 @@ export function CapturePage() {
         },
       });
     } catch {
-      // aborted or network error — surface a message only if we got none from
-      // the onError callback (e.g. a hard network failure).
       if (acc === "" && !errorSet) {
-        setExplainError("Explanation request failed.");
+        setExplainError(t("capture.explanationFailed"));
       }
     } finally {
       setExplainStreaming(false);
       explainAbortRef.current = null;
     }
-  }, [id, selectedIndices, explainStreaming]);
+  }, [id, selectedIndices, explainStreaming, t]);
 
   const stopExplain = () => {
     explainAbortRef.current?.abort();
@@ -236,11 +243,11 @@ export function CapturePage() {
         </button>
         <div>
           <p className="text-sm font-medium text-panel-text">
-            {capture?.filename ?? "Loading..."}
+            {capture?.filename ?? t("common.loading")}
           </p>
           <p className="text-xs text-panel-muted">
             {capture
-              ? `${capture.packet_count} packets · ${(capture.size_bytes / 1024).toFixed(0)} KB · ${capture.status}`
+              ? `${t("capture.totalPackets", { count: capture.packet_count })} · ${(capture.size_bytes / 1024).toFixed(0)} KB · ${capture.status}`
               : ""}
           </p>
         </div>
@@ -258,7 +265,7 @@ export function CapturePage() {
                     : "text-panel-muted hover:bg-panel-border"
                 }`}
               >
-                {mode === "packets" ? "Packets" : "Statistics"}
+                {mode === "packets" ? t("capture.packetsLabel") : t("capture.statistics")}
               </button>
             ))}
           </div>
@@ -268,7 +275,7 @@ export function CapturePage() {
             <>
               <button
                 onClick={() => setAiDockOpen(!aiDockOpen)}
-                title={aiDockOpen ? "Close AI Tools panel" : "Open AI Tools panel"}
+                title={aiDockOpen ? t("capture.closeAiPanel") : t("capture.openAiPanel")}
                 className={`rounded-lg p-1.5 transition ${
                   aiDockOpen
                     ? "bg-panel-accent/20 text-panel-accent"
@@ -280,7 +287,7 @@ export function CapturePage() {
               {aiDockOpen && (
                 <button
                   onClick={toggleAiPopOut}
-                  title={aiPoppedOut ? "Dock panel" : "Pop out panel"}
+                  title={aiPoppedOut ? t("capture.dockPanel") : t("capture.popOutPanel")}
                   className="rounded-lg p-1.5 text-panel-muted transition hover:bg-panel-border hover:text-panel-text"
                 >
                   {aiPoppedOut ? (
@@ -299,47 +306,60 @@ export function CapturePage() {
               <div className="relative">
                 <Search className="pointer-events-none absolute left-2 top-1.5 h-3.5 w-3.5 text-panel-muted" />
                 <input
-                  aria-label="Search packets"
+                  aria-label={t("capture.searchPackets")}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search src/dst/info…"
+                  placeholder={t("capture.searchPlaceholder")}
                   className="w-52 rounded border border-panel-border bg-panel-bg py-1 pl-7 pr-2 text-xs text-panel-text focus:border-panel-accent focus:outline-none"
                 />
               </div>
               <select
-                aria-label="Filter by protocol"
+                aria-label={t("capture.filterByProtocol")}
                 value={filterProto}
                 onChange={(e) => setFilterProto(e.target.value)}
                 className="rounded border border-panel-border bg-panel-bg px-2 py-1 text-xs text-panel-text focus:border-panel-accent focus:outline-none"
               >
                 {PROTOCOL_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
-                    {opt.label}
+                    {opt.labelKey ? t(opt.labelKey) : opt.label}
                   </option>
                 ))}
               </select>
               <a
                 href={packetsExportUrl(id!, "csv", filterProto, appliedSearch)}
                 download
-                aria-label="Export packets as CSV"
-                title="Export current view as CSV"
+                aria-label={t("capture.exportCsv")}
+                title={t("capture.exportCsvTitle")}
                 className="inline-flex items-center gap-1 rounded border border-panel-border px-2 py-1 text-xs text-panel-text transition hover:bg-panel-border"
               >
-                <Download className="h-3.5 w-3.5" /> CSV
+                <Download className="h-3.5 w-3.5" /> {t("capture.csv")}
               </a>
             </>
           )}
           <div className="flex items-center gap-1 rounded border border-panel-border px-1">
+            <Languages className="h-3.5 w-3.5 text-panel-muted" />
+            <select
+              aria-label={t("common.language")}
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as Language)}
+              className="bg-transparent py-1 pr-1 text-xs text-panel-text focus:outline-none"
+            >
+              {LANGUAGES.map((l) => (
+                <option key={l.value} value={l.value}>{l.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-1 rounded border border-panel-border px-1">
             <Palette className="h-3.5 w-3.5 text-panel-muted" />
             <select
-              aria-label="Theme"
+              aria-label={t("common.theme")}
               value={theme}
               onChange={(e) => setTheme(e.target.value as Theme)}
               className="bg-transparent py-1 pr-1 text-xs text-panel-text focus:outline-none"
             >
-              <option value="dark">Dark</option>
-              <option value="light">Light</option>
-              <option value="obsidian">Obsidian</option>
+              <option value="dark">{t("common.dark")}</option>
+              <option value="light">{t("common.light")}</option>
+              <option value="obsidian">{t("common.obsidian")}</option>
             </select>
           </div>
         </div>
@@ -352,8 +372,8 @@ export function CapturePage() {
             <Loader2 className="mx-auto h-8 w-8 animate-spin text-panel-accent" />
             <p className="mt-3 text-sm text-panel-muted">
               {capture?.status === "failed"
-                ? "Parsing failed. Please re-upload."
-                : "Parsing packet capture..."}
+                ? t("capture.parsingFailed")
+                : t("capture.parsingCapture")}
             </p>
           </div>
         </div>
@@ -377,23 +397,23 @@ export function CapturePage() {
                       {selectedIndices.length > 0 && (
                         <div className="flex items-center gap-2 border-t border-panel-border bg-panel-header/40 px-3 py-1.5">
                           <span className="text-[11px] text-panel-muted">
-                            {selectedIndices.length} packet{selectedIndices.length > 1 ? "s" : ""} selected
+                            {t("capture.packetsSelected", { count: selectedIndices.length })}
                           </span>
                           {explainStreaming ? (
                             <button
                               onClick={stopExplain}
-                              aria-label="Stop explain"
+                              aria-label={t("common.stop")}
                               className="inline-flex items-center gap-1 rounded bg-panel-error/20 px-2 py-0.5 text-[11px] font-medium text-panel-error hover:bg-panel-error/30"
                             >
-                              <Square className="h-3 w-3" /> Stop
+                              <Square className="h-3 w-3" /> {t("common.stop")}
                             </button>
                           ) : (
                             <button
                               onClick={explainSelected}
-                              aria-label="Explain selected packets"
+                              aria-label={t("capture.explainSelected")}
                               className="inline-flex items-center gap-1 rounded bg-panel-accent/20 px-2 py-0.5 text-[11px] font-medium text-panel-accent hover:bg-panel-accent/30"
                             >
-                              <Sparkles className="h-3 w-3" /> Explain
+                              <Sparkles className="h-3 w-3" /> {t("capture.explain")}
                             </button>
                           )}
                         </div>
@@ -402,10 +422,10 @@ export function CapturePage() {
                       {(explainText || explainStreaming || explainError) && (
                         <div className="border-t border-panel-border bg-panel-header/40 px-3 py-2">
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-[11px] font-medium text-panel-muted">Packet Explanation</span>
+                            <span className="text-[11px] font-medium text-panel-muted">{t("capture.packetExplanation")}</span>
                             <button
                               onClick={dismissExplain}
-                              aria-label="Dismiss explanation"
+                              aria-label={t("common.close")}
                               className="rounded p-0.5 text-panel-muted hover:bg-panel-border hover:text-panel-text"
                             >
                               <X className="h-3 w-3" />
@@ -422,7 +442,7 @@ export function CapturePage() {
                               </p>
                             ) : (
                               <div className="flex items-center gap-2 text-xs text-panel-muted">
-                                <Loader2 className="h-3 w-3 animate-spin" /> Generating explanation...
+                                <Loader2 className="h-3 w-3 animate-spin" /> {t("capture.generatingExplanation")}
                               </div>
                             )}
                           </div>
@@ -431,25 +451,25 @@ export function CapturePage() {
                       {/* Pagination controls */}
                       <div className="flex items-center justify-between border-t border-panel-border bg-panel-header px-3 py-1.5 text-xs">
                         <div className="flex items-center gap-2 text-panel-muted">
-                          <span>Page {page + 1} of {totalPages}</span>
+                          <span>{t("capture.pageOf", { page: page + 1, total: totalPages })}</span>
                           <span>·</span>
-                          <span>{totalPackets.toLocaleString()} packets</span>
+                          <span>{t("capture.totalPackets", { count: totalPackets })}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <select
-                            aria-label="Packets per page"
+                            aria-label={t("capture.packetsPerPage")}
                             value={pageSize}
                             onChange={(e) => setPageSize(Number(e.target.value))}
                             className="rounded border border-panel-border bg-panel-bg px-2 py-1 text-xs text-panel-text focus:border-panel-accent focus:outline-none"
                           >
                             {PAGE_SIZE_OPTIONS.map((size) => (
                               <option key={size} value={size}>
-                                {size} / page
+                                {t("capture.perPage", { size })}
                               </option>
                             ))}
                           </select>
                           <button
-                            aria-label="Previous page"
+                            aria-label={t("capture.previousPage")}
                             disabled={page === 0 || packetsQuery.isLoading}
                             onClick={() => setPage((p) => Math.max(0, p - 1))}
                             className="rounded border border-panel-border p-1 text-panel-text disabled:opacity-40 hover:bg-panel-border"
@@ -457,7 +477,7 @@ export function CapturePage() {
                             <ChevronLeft className="h-3 w-3" />
                           </button>
                           <button
-                            aria-label="Next page"
+                            aria-label={t("capture.nextPage")}
                             disabled={page >= totalPages - 1 || packetsQuery.isLoading}
                             onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                             className="rounded border border-panel-border p-1 text-panel-text disabled:opacity-40 hover:bg-panel-border"
@@ -499,7 +519,7 @@ export function CapturePage() {
                   <Panel defaultSize={30} minSize={20} order={2} id="ai-dock">
                     <div className="flex h-full flex-col border-l border-panel-border">
                       <div className="flex items-center justify-between border-b border-panel-border bg-panel-header px-3 py-1.5">
-                        <span className="text-xs font-medium text-panel-muted">AI Tools</span>
+                        <span className="text-xs font-medium text-panel-muted">{t("capture.aiTools")}</span>
                       </div>
                       <div className="flex-1 overflow-hidden">
                         {captureCommandPanel}
@@ -533,7 +553,7 @@ export function CapturePage() {
           onChange={setAiFloat}
           onDock={() => toggleAiPopOut()}
           onClose={() => setAiDockOpen(false)}
-          title="AI Tools"
+          title={t("capture.aiTools")}
         >
           {captureCommandPanel}
         </FloatingWindow>

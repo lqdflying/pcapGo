@@ -3,6 +3,7 @@ import { Copy, Check } from "lucide-react";
 import { CaptureCommandBuilder } from "./CaptureCommandBuilder";
 import { CaptureCommandAIGenerator } from "./CaptureCommandAIGenerator";
 import { AIChatPanel } from "./AIChatPanel";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   captureId?: string;
@@ -11,6 +12,7 @@ interface Props {
 type Mode = "builder" | "ai" | "chat";
 
 export function CaptureCommandPanel({ captureId }: Props) {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<Mode>("builder");
   const [command, setCommand] = useState("");
   const [copied, setCopied] = useState(false);
@@ -51,7 +53,7 @@ export function CaptureCommandPanel({ captureId }: Props) {
                   : "text-panel-muted hover:bg-panel-border"
               }`}
             >
-              {m === "builder" ? "Builder" : m === "ai" ? "AI Generate" : "Chat"}
+              {m === "builder" ? t("captureCommand.builder") : m === "ai" ? t("captureCommand.aiGenerate") : t("captureCommand.chat")}
             </button>
           ))}
         </div>
@@ -69,7 +71,7 @@ export function CaptureCommandPanel({ captureId }: Props) {
         ) : captureId ? (
           <AIChatPanel captureId={captureId} />
         ) : (
-          <p className="p-4 text-xs text-panel-muted">Open a capture to use chat.</p>
+          <p className="p-4 text-xs text-panel-muted">{t("captureCommand.openCaptureToChat")}</p>
         )}
       </div>
 
@@ -78,7 +80,7 @@ export function CaptureCommandPanel({ captureId }: Props) {
         <div className="border-t border-panel-border bg-panel-header/40">
           <div className="flex items-center justify-between px-3 py-1.5">
             <span className="text-[11px] font-medium text-panel-muted">
-              Generated Command
+              {t("captureCommand.generatedCommand")}
             </span>
             <button
               onClick={handleCopy}
@@ -86,11 +88,11 @@ export function CaptureCommandPanel({ captureId }: Props) {
             >
               {copied ? (
                 <>
-                  <Check className="h-3 w-3" /> Copied!
+                  <Check className="h-3 w-3" /> {t("common.copied")}
                 </>
               ) : (
                 <>
-                  <Copy className="h-3 w-3" /> Copy
+                  <Copy className="h-3 w-3" /> {t("common.copy")}
                 </>
               )}
             </button>

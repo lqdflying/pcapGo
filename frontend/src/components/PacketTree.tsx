@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronRight, ChevronDown, Loader2 } from "lucide-react";
 import type { LayerNode, PacketDetail } from "../api/client";
 
@@ -9,10 +10,11 @@ interface Props {
 }
 
 export function PacketTree({ detail, loading, onSelectLayer }: Props) {
+  const { t } = useTranslation();
   return (
     <div className="flex h-full flex-col border-r border-panel-border">
       <div className="border-b border-panel-border bg-panel-header px-3 py-1.5 text-xs font-medium text-panel-muted">
-        Packet Details
+        {t("packetTree.packetDetails")}
       </div>
       <div className="flex-1 overflow-auto p-2">
         {loading ? (
@@ -23,9 +25,7 @@ export function PacketTree({ detail, loading, onSelectLayer }: Props) {
           <div>
             <div className="mb-2 rounded border border-panel-border bg-panel-header/30 px-2 py-1">
               <div className="text-xs text-panel-muted">
-                <span className="text-panel-text font-medium">
-                  Frame {detail.idx}
-                </span>
+                <span className="text-panel-text font-medium">{t("packetTree.frame", { idx: detail.idx })}</span>
                 {" "}· {detail.length} bytes · {detail.proto} · {detail.src} → {detail.dst}
               </div>
               <div className="mt-0.5 text-[11px] text-panel-muted/70 truncate">
@@ -44,7 +44,7 @@ export function PacketTree({ detail, loading, onSelectLayer }: Props) {
           </div>
         ) : (
           <p className="p-4 text-xs text-panel-muted">
-            Select a packet to view protocol details
+            {t("packetTree.selectPacket")}
           </p>
         )}
       </div>

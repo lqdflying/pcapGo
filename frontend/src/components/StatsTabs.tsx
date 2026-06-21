@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2, ArrowUp, ArrowDown, Search } from "lucide-react";
 import type {
   StatisticsResponse,
@@ -27,34 +28,38 @@ export function StatsTabs({
   onFollowConversation,
   onBucketChange,
 }: Props) {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>("protocols");
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: "protocols", label: "Protocol Hierarchy" },
-    { id: "endpoints", label: "Endpoints" },
-    { id: "conversations", label: "Conversations" },
-    { id: "io", label: "IO Graph" },
+    { id: "protocols", label: t("stats.protocolHierarchy") },
+    { id: "endpoints", label: t("stats.endpoints") },
+    { id: "conversations", label: t("stats.conversations") },
+    { id: "io", label: t("stats.ioGraph") },
   ];
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-1 border-b border-panel-border px-4 py-1.5">
-        {tabs.map((t) => (
+        {tabs.map((tb) => (
           <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
+            key={tb.id}
+            onClick={() => setTab(tb.id)}
             className={`rounded px-3 py-1 text-xs transition ${
-              tab === t.id
+              tab === tb.id
                 ? "bg-panel-accent/20 text-panel-accent"
                 : "text-panel-muted hover:text-panel-text"
             }`}
           >
-            {t.label}
+            {tb.label}
           </button>
         ))}
         {stats && (
           <span className="ml-auto text-xs text-panel-muted">
-            {stats.packet_count} packets · {(stats.duration * 1000).toFixed(1)} ms
+            {t("stats.packetsDuration", {
+              packets: stats.packet_count,
+              duration: (stats.duration * 1000).toFixed(1),
+            })}
           </span>
         )}
       </div>
@@ -65,7 +70,7 @@ export function StatsTabs({
             <Loader2 className="h-6 w-6 animate-spin text-panel-muted" />
           </div>
         ) : !stats ? (
-          <p className="text-sm text-panel-muted">No statistics available</p>
+          <p className="text-sm text-panel-muted">{t("stats.noStatistics")}</p>
         ) : tab === "protocols" ? (
           <ProtocolTree
             protocols={stats.protocols}
@@ -182,10 +187,11 @@ function ProtocolTree({
   protocols: ProtocolHierarchy[];
   totalPackets: number;
 }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   if (protocols.length === 0) {
-    return <p className="text-xs text-panel-muted">No protocols detected</p>;
+    return <p className="text-xs text-panel-muted">{t("stats.noProtocols")}</p>;
   }
 
   const totalBytes = protocols.reduce((s, p) => s + p.byte_count, 0);
@@ -228,13 +234,13 @@ function ProtocolTree({
   return (
     <div>
       <div className="mb-2 flex items-center border-b border-panel-border pb-1 text-[11px] text-panel-muted">
-        <span className="flex-1">Protocol</span>
-        <span className="mr-6 w-44 text-right">Packets (% of total)</span>
-        <span className="w-24 text-right">Bytes</span>
+        <span className="flex-1">{t("stats.protocol")}</span>
+        <span className="mr-6 w-44 text-right">{t("stats.packetsOfTotal")}</span>
+        <span className="w-24 text-right">{t("common.bytes")}</span>
       </div>
       {protocols.map((p) => renderNode(p, 0))}
       <div className="mt-1 flex items-center border-t border-panel-border pt-1 text-[11px] font-medium text-panel-text">
-        <span className="flex-1">Total</span>
+        <span className="flex-1">{t("stats.total")}</span>
         <span className="mr-6 w-44 text-right">{pktBase} pkts</span>
         <span className="w-24 text-right">{formatBytes(totalBytes)}</span>
       </div>
@@ -258,6 +264,7 @@ function EndpointsTable({
   endpoints: EndpointStats[];
   onSelect?: (ip: string) => void;
 }) {
+  const { t } = useTranslation();
   const [filter, setFilter] = useState("");
   const [sortKey, setSortKey] = useState<EndpointSortKey>("packet_count");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -291,7 +298,7 @@ function EndpointsTable({
   const totalBytes = rows.reduce((s, e) => s + e.byte_count, 0);
 
   if (endpoints.length === 0) {
-    return <p className="text-xs text-panel-muted">No endpoints</p>;
+    return <p className="text-xs text-panel-muted">{t("stats.noEndpoints")}</p>;
   }
 
   return (
@@ -299,15 +306,15 @@ function EndpointsTable({
       <FilterBox
         value={filter}
         onChange={setFilter}
-        placeholder="Filter endpoints"
-        count={`${rows.length} of ${endpoints.length}`}
+        placeholder={t("stats.filterEndpoints")}
+        count={t("stats.countOfTotal", { count: rows.length, total: endpoints.length })}
       />
       <div className="mb-2 flex items-center border-b border-panel-border pb-1 text-[11px] text-panel-muted">
-        <SortHeader label="Address" field="address" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="flex-1" />
-        <SortHeader label="Packets" field="packet_count" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-16 justify-end" />
-        <SortHeader label="Tx" field="tx_packets" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-16 justify-end" />
-        <SortHeader label="Rx" field="rx_packets" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-16 justify-end" />
-        <SortHeader label="Bytes" field="byte_count" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-20 justify-end" />
+        <SortHeader label={t("stats.address")} field="address" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="flex-1" />
+        <SortHeader label={t("common.packets")} field="packet_count" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-16 justify-end" />
+        <SortHeader label={t("stats.tx")} field="tx_packets" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-16 justify-end" />
+        <SortHeader label={t("stats.rx")} field="rx_packets" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-16 justify-end" />
+        <SortHeader label={t("common.bytes")} field="byte_count" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-20 justify-end" />
       </div>
       {rows.map((ep) => (
         <div
@@ -325,7 +332,7 @@ function EndpointsTable({
         </div>
       ))}
       <div className="mt-1 flex items-center border-t border-panel-border pt-1 text-[11px] font-medium text-panel-text">
-        <span className="flex-1">Total ({rows.length})</span>
+        <span className="flex-1">{t("stats.total")} ({rows.length})</span>
         <span className="w-16 text-right">{totalPkts}</span>
         <span className="w-16" />
         <span className="w-16" />
@@ -348,6 +355,7 @@ function ConversationsTable({
   onSelect?: (conv: ConversationStats) => void;
   onFollow?: (conv: ConversationStats) => void;
 }) {
+  const { t } = useTranslation();
   const [filter, setFilter] = useState("");
   const [sortKey, setSortKey] = useState<ConvSortKey>("packet_count");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -388,7 +396,7 @@ function ConversationsTable({
   }, [conversations, filter, sortKey, sortDir]);
 
   if (conversations.length === 0) {
-    return <p className="text-xs text-panel-muted">No conversations</p>;
+    return <p className="text-xs text-panel-muted">{t("stats.noConversations")}</p>;
   }
 
   return (
@@ -396,21 +404,21 @@ function ConversationsTable({
       <FilterBox
         value={filter}
         onChange={setFilter}
-        placeholder="Filter conversations"
-        count={`${rows.length} of ${conversations.length}`}
+        placeholder={t("stats.filterConversations")}
+        count={t("stats.countOfTotal", { count: rows.length, total: conversations.length })}
       />
       <div className="mb-2 flex items-center border-b border-panel-border pb-1 text-[11px] text-panel-muted">
         <span className="w-8">#</span>
-        <span className="w-32">Source</span>
-        <span className="w-32">Destination</span>
-        <span className="w-12">Proto</span>
-        <span className="w-16">App</span>
-        <span className="w-20">Flags</span>
-        <SortHeader label="Pkts" field="packet_count" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-14 justify-end" />
-        <SortHeader label="Bytes" field="byte_count" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-14 justify-end" />
-        <SortHeader label="Avg" field="avg" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-14 justify-end" />
-        <SortHeader label="Dur" field="duration" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-16 justify-end" />
-        {onFollow && <span className="w-16 text-right">Stream</span>}
+        <span className="w-32">{t("stats.source")}</span>
+        <span className="w-32">{t("stats.destination")}</span>
+        <span className="w-12">{t("packetList.proto")}</span>
+        <span className="w-16">{t("stats.app")}</span>
+        <span className="w-20">{t("stats.flags")}</span>
+        <SortHeader label={t("stats.pkts")} field="packet_count" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-14 justify-end" />
+        <SortHeader label={t("common.bytes")} field="byte_count" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-14 justify-end" />
+        <SortHeader label={t("stats.avg")} field="avg" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-14 justify-end" />
+        <SortHeader label={t("stats.dur")} field="duration" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="w-16 justify-end" />
+        {onFollow && <span className="w-16 text-right">{t("stats.stream")}</span>}
       </div>
       {rows.map((conv, i) => (
         <div
@@ -459,7 +467,7 @@ function ConversationsTable({
                 }}
                 className="rounded px-1.5 py-0.5 text-[11px] text-panel-accent hover:bg-panel-accent/10"
               >
-                Follow
+                {t("stats.follow")}
               </button>
             </span>
           )}
@@ -491,6 +499,7 @@ function IOGraph({
   metric: "packets" | "bytes";
   onChange?: (bucketSeconds: number, metric: "packets" | "bytes") => void;
 }) {
+  const { t } = useTranslation();
   const values = buckets.map((b) => (metric === "bytes" ? b.byte_count : b.packet_count));
   const maxVal = Math.max(...values, 1);
   const peak = values.length ? Math.max(...values) : 0;
@@ -508,10 +517,17 @@ function IOGraph({
     <div>
       <div className="mb-3 flex items-center justify-between text-xs">
         <p className="text-panel-muted">
-          IO Graph ({buckets.length} buckets, {(duration * 1000).toFixed(0)} ms total)
+          {t("stats.ioGraphInfo", {
+            buckets: buckets.length,
+            duration: (duration * 1000).toFixed(0),
+          })}
           {n > 0 && (
             <span className="ml-2">
-              · peak {peak} {unit} · avg {avg.toFixed(1)} {unit}
+              {t("stats.ioGraphPeakAvg", {
+                peak,
+                unit,
+                avg: avg.toFixed(1),
+              })}
             </span>
           )}
         </p>
@@ -536,14 +552,14 @@ function IOGraph({
             }
             className="rounded border border-panel-border bg-panel-bg px-2 py-1 text-xs text-panel-text focus:border-panel-accent focus:outline-none"
           >
-            <option value="packets">Packets</option>
-            <option value="bytes">Bytes</option>
+            <option value="packets">{t("capture.packetsLabel")}</option>
+            <option value="bytes">{t("common.bytes")}</option>
           </select>
         </div>
       </div>
 
       {n === 0 ? (
-        <p className="text-xs text-panel-muted">No IO data</p>
+        <p className="text-xs text-panel-muted">{t("stats.noIoData")}</p>
       ) : (
         <>
           <svg
@@ -551,7 +567,7 @@ function IOGraph({
             preserveAspectRatio="none"
             className="h-44 w-full"
             role="img"
-            aria-label="IO graph"
+            aria-label={t("stats.ioGraphLabel")}
           >
             {buckets.map((b, i) => {
               const val = metric === "bytes" ? b.byte_count : b.packet_count;

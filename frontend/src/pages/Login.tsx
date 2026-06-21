@@ -1,8 +1,10 @@
 import { useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { loginWithGitHub } from "../api/client";
 import { Github } from "lucide-react";
 
 export function LoginPage() {
+  const { t } = useTranslation();
   const location = useLocation();
   const params = new URLSearchParams(location.search);
   const authError = params.get("auth_error");
@@ -55,29 +57,27 @@ export function LoginPage() {
           pcapGo
         </h1>
         <p className="mb-8 text-sm text-panel-muted">
-          Upload and analyze packet captures with Wireshark-like inspection
-          and AI-powered diagnostics.
+          {t("login.subtitle")}
         </p>
         <button
           onClick={handleLogin}
           className="inline-flex items-center gap-3 rounded-lg bg-panel-accent px-6 py-3 font-medium text-panel-header transition hover:bg-panel-accent/80"
         >
           <Github className="h-5 w-5" />
-          Sign in with GitHub
+          {t("login.signInWithGithub")}
         </button>
         {authError === "not_allowed" && (
           <p className="mt-4 text-sm text-panel-error">
-            Your GitHub account is not authorized to access this application.
-            Please contact the administrator.
+            {t("login.notAuthorized")}
           </p>
         )}
         {authError && authError !== "not_allowed" && (
           <p className="mt-4 text-sm text-panel-error">
-            Authentication failed. Please try again.
+            {t("login.authFailed")}
           </p>
         )}
         <p className="mt-6 text-xs text-panel-muted">
-          Access is restricted to authorized GitHub accounts.
+          {t("login.accessRestricted")}
         </p>
       </div>
     </div>

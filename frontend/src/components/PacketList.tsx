@@ -1,4 +1,5 @@
 import { useRef, useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { PacketSummary } from "../api/client";
 
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function PacketList({ packets, selectedIdx, selectedSet, onSelect, loading }: Props) {
+  const { t } = useTranslation();
   const parentRef = useRef<HTMLDivElement>(null);
 
   const virtualizer = useVirtualizer({
@@ -70,18 +72,18 @@ export function PacketList({ packets, selectedIdx, selectedSet, onSelect, loadin
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center border-b border-panel-border bg-panel-header px-2 py-1 text-[11px] font-medium text-panel-muted select-none">
-        <span className="w-12">No.</span>
-        <span className="w-28">Time</span>
-        <span className="w-36">Source</span>
-        <span className="w-36">Destination</span>
-        <span className="w-12">Proto</span>
-        <span className="w-12">Len</span>
-        <span className="flex-1">Info</span>
+        <span className="w-12">{t("packetList.no")}</span>
+        <span className="w-28">{t("packetList.time")}</span>
+        <span className="w-36">{t("packetList.source")}</span>
+        <span className="w-36">{t("packetList.destination")}</span>
+        <span className="w-12">{t("packetList.proto")}</span>
+        <span className="w-12">{t("packetList.len")}</span>
+        <span className="flex-1">{t("packetList.info")}</span>
       </div>
 
       <div ref={parentRef} className="flex-1 overflow-auto">
         {loading ? (
-          <p className="p-4 text-xs text-panel-muted">Loading packets...</p>
+          <p className="p-4 text-xs text-panel-muted">{t("packetList.loadingPackets")}</p>
         ) : (
           <div
             style={{

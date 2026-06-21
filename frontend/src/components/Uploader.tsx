@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { useTranslation, Trans } from "react-i18next";
 import { Upload, Loader2 } from "lucide-react";
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
 const CAPTURE_NAME_RE = /\.(pcapng|pcap|cap)[-_.]?\d*$/i;
 
 export function Uploader({ onUpload, uploading }: Props) {
+  const { t } = useTranslation();
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -38,7 +40,7 @@ export function Uploader({ onUpload, uploading }: Props) {
     <div
       role="button"
       tabIndex={0}
-      aria-label="Upload packet capture"
+      aria-label={t("uploader.uploadCapture")}
       onDrop={handleDrop}
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
@@ -59,21 +61,20 @@ export function Uploader({ onUpload, uploading }: Props) {
         type="file"
         onChange={handleChange}
         className="hidden"
-        aria-label="Choose pcap file"
+        aria-label={t("uploader.chooseFile")}
       />
       {uploading ? (
         <div className="flex items-center justify-center gap-2">
           <Loader2 className="h-5 w-5 animate-spin text-panel-accent" />
-          <span className="text-sm text-panel-muted">Uploading and parsing...</span>
+          <span className="text-sm text-panel-muted">{t("uploader.uploading")}</span>
         </div>
       ) : (
         <>
           <Upload className="mx-auto mb-2 h-8 w-8 text-panel-muted" />
           <p className="text-sm text-panel-muted">
-            Drop a <span className="text-panel-accent">.pcap</span> or{" "}
-            <span className="text-panel-accent">.pcapng</span> file here, or click to browse
+            <Trans i18nKey="uploader.dropHere" components={{ accent: <span className="text-panel-accent" /> }} />
           </p>
-          <p className="mt-1 text-xs text-panel-muted/60">Max file size: 100 MB</p>
+          <p className="mt-1 text-xs text-panel-muted/60">{t("uploader.maxFileSize")}</p>
         </>
       )}
     </div>

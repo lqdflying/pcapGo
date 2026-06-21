@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -22,6 +23,7 @@ import {
 } from "lucide-react";
 
 export function AdminPage() {
+  const { t } = useTranslation();
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -43,7 +45,7 @@ export function AdminPage() {
       setError(null);
     },
     onError: (err: any) => {
-      setError(err.response?.data?.detail || "Failed to add user");
+      setError(err.response?.data?.detail || t("admin.failedToAdd"));
     },
   });
 
@@ -54,7 +56,7 @@ export function AdminPage() {
       setError(null);
     },
     onError: (err: any) => {
-      setError(err.response?.data?.detail || "Failed to remove user");
+      setError(err.response?.data?.detail || t("admin.failedToRemove"));
     },
   });
 
@@ -66,7 +68,7 @@ export function AdminPage() {
       setError(null);
     },
     onError: (err: any) => {
-      setError(err.response?.data?.detail || "Failed to update role");
+      setError(err.response?.data?.detail || t("admin.failedToUpdate"));
     },
   });
 
@@ -91,16 +93,16 @@ export function AdminPage() {
           <button
             onClick={() => navigate("/")}
             className="rounded-lg p-2 text-panel-muted transition hover:bg-panel-border hover:text-panel-text"
-            title="Back to Dashboard"
+            title={t("admin.backToDashboard")}
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
           <div>
             <h1 className="text-lg font-semibold text-panel-text">
-              User Management
+              {t("admin.userManagement")}
             </h1>
             <p className="text-xs text-panel-muted">
-              Manage allowed GitHub users
+              {t("admin.manageUsers")}
             </p>
           </div>
         </div>
@@ -117,7 +119,7 @@ export function AdminPage() {
         <form onSubmit={handleAdd} className="flex items-end gap-3">
           <div className="flex-1">
             <label className="mb-1 block text-xs font-medium text-panel-muted">
-              GitHub Username
+              {t("admin.githubUsername")}
             </label>
             <input
               type="text"
@@ -129,15 +131,15 @@ export function AdminPage() {
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-panel-muted">
-              Role
+              {t("admin.role")}
             </label>
             <select
               value={newRole}
               onChange={(e) => setNewRole(e.target.value as "user" | "super_admin")}
               className="rounded-lg border border-panel-border bg-panel-bg px-3 py-2 text-sm text-panel-text focus:border-panel-accent focus:outline-none"
             >
-              <option value="user">User</option>
-              <option value="super_admin">Super Admin</option>
+              <option value="user">{t("admin.userRole")}</option>
+              <option value="super_admin">{t("admin.superAdmin")}</option>
             </select>
           </div>
           <button
@@ -150,7 +152,7 @@ export function AdminPage() {
             ) : (
               <UserPlus className="h-4 w-4" />
             )}
-            Add User
+            {t("admin.addUser")}
           </button>
         </form>
         {error && (
@@ -163,19 +165,19 @@ export function AdminPage() {
         <div className="mb-4 flex items-center gap-2">
           <Users className="h-4 w-4 text-panel-muted" />
           <h2 className="text-sm font-medium text-panel-muted">
-            Allowed Users{data ? ` (${data.total})` : ""}
+            {data ? t("admin.allowedUsersCount", { count: data.total }) : t("admin.allowedUsers")}
           </h2>
         </div>
 
         {isLoading ? (
-          <p className="text-sm text-panel-muted">Loading...</p>
+          <p className="text-sm text-panel-muted">{t("common.loading")}</p>
         ) : isError ? (
           <p className="text-sm text-panel-error">
-            Failed to load allowed users. Please try again.
+            {t("admin.failedToLoad")}
           </p>
         ) : !data?.users?.length ? (
           <p className="text-sm text-panel-muted">
-            No users configured. Add a GitHub username above.
+            {t("admin.noUsers")}
           </p>
         ) : (
           <div className="space-y-2">
@@ -195,13 +197,13 @@ export function AdminPage() {
                       {au.github_login}
                       {isSeedAdmin(au) && (
                         <span className="ml-2 text-xs text-panel-accent">
-                          Seed Admin
+                          {t("admin.seedAdmin")}
                         </span>
                       )}
                     </p>
                     <p className="text-xs text-panel-muted">
-                      {au.role === "super_admin" ? "Super Admin" : "User"}
-                      {au.added_by && ` · Added by ${au.added_by}`}
+                      {au.role === "super_admin" ? t("admin.superAdmin") : t("admin.userRole")}
+                      {au.added_by && ` · ${t("admin.addedBy", { name: au.added_by })}`}
                       {" · "}
                       {new Date(au.created_at).toLocaleDateString()}
                     </p>
@@ -210,11 +212,11 @@ export function AdminPage() {
                 <div className="flex items-center gap-3">
                   {au.has_logged_in ? (
                     <span className="inline-flex items-center gap-1 text-xs text-panel-success">
-                      <CheckCircle className="h-3.5 w-3.5" /> Active
+                      <CheckCircle className="h-3.5 w-3.5" /> {t("admin.active")}
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 text-xs text-panel-muted">
-                      <Clock className="h-3.5 w-3.5" /> Pending
+                      <Clock className="h-3.5 w-3.5" /> {t("admin.pending")}
                     </span>
                   )}
 
@@ -231,22 +233,22 @@ export function AdminPage() {
                         }
                         className="rounded border border-panel-border bg-panel-bg px-2 py-1 text-xs text-panel-text focus:outline-none"
                       >
-                        <option value="user">User</option>
-                        <option value="super_admin">Super Admin</option>
+                        <option value="user">{t("admin.userRole")}</option>
+                        <option value="super_admin">{t("admin.superAdmin")}</option>
                       </select>
                       <button
                         onClick={() => {
                           if (
                             window.confirm(
-                              `Remove "${au.github_login}" from allowed users?`
+                              t("admin.removeConfirm", { login: au.github_login })
                             )
                           ) {
                             deleteMut.mutate(au.github_login);
                           }
                         }}
                         className="rounded-lg p-1.5 text-panel-muted transition hover:bg-panel-error/10 hover:text-panel-error"
-                        title="Remove user"
-                        aria-label="Remove user"
+                        title={t("admin.removeUser")}
+                        aria-label={t("admin.removeUser")}
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
