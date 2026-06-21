@@ -5,6 +5,7 @@ import { getUser } from "./api/client";
 import { LoginPage } from "./pages/Login";
 import { DashboardPage } from "./pages/Dashboard";
 import { CapturePage } from "./pages/Capture";
+import { AdminPage } from "./pages/Admin";
 
 export function App() {
   const { user, loading, setUser, setLoading } = useAuthStore();
@@ -62,6 +63,18 @@ export function App() {
         element={
           user ? (
             <CapturePage />
+          ) : (
+            <Navigate to="/login" replace state={{ from: location }} />
+          )
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          user?.role === "super_admin" ? (
+            <AdminPage />
+          ) : user ? (
+            <Navigate to="/" replace />
           ) : (
             <Navigate to="/login" replace state={{ from: location }} />
           )

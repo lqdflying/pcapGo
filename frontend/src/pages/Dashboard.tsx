@@ -23,6 +23,10 @@ import {
   Palette,
   Terminal,
   X,
+  Shield,
+  Eye,
+  EyeOff,
+  User as UserIcon,
 } from "lucide-react";
 import { useThemeStore, type Theme } from "../lib/store";
 import { CaptureCommandPanel } from "../components/CaptureCommandPanel";
@@ -40,6 +44,10 @@ export function DashboardPage() {
   const queryClient = useQueryClient();
   const [uploading, setUploading] = useState(false);
   const [showCaptureCommand, setShowCaptureCommand] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const [ownerFilter, setOwnerFilter] = useState("");
+
+  const isAdmin = user?.role === "super_admin";
 
   useEffect(() => {
     getUser()
@@ -48,8 +56,13 @@ export function DashboardPage() {
   }, []);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["captures"],
-    queryFn: listCaptures,
+    queryKey: ["captures", showAll, ownerFilter],
+    queryFn: () =>
+      listCaptures(
+        isAdmin && showAll
+          ? { all: true, owner: ownerFilter || undefined }
+          : undefined
+      ),
     refetchInterval: (q) => {
       const captures = (q.state.data?.captures ?? []) as Capture[];
       const pending = captures.some(
@@ -124,6 +137,15 @@ export function DashboardPage() {
               <span>{user.login}</span>
             </div>
           )}
+          {isAdmin && (
+            <button
+              onClick={() => navigate("/admin")}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-panel-accent/30 px-3 py-1.5 text-xs font-medium text-panel-accent transition hover:bg-panel-accent/10"
+              title="User Management"
+            >
+              <Shield className="h-3.5 w-3.5" /> Admin
+            </button>
+          )}
           <button
             onClick={() => setShowCaptureCommand(true)}
             className="inline-flex items-center gap-1.5 rounded-lg border border-panel-border px-3 py-1.5 text-xs font-medium text-panel-muted transition hover:bg-panel-border hover:text-panel-text"
@@ -161,9 +183,46 @@ export function DashboardPage() {
 
       {/* Captures list */}
       <main className="flex-1 overflow-auto px-6 py-4">
-        <h2 className="mb-4 text-sm font-medium text-panel-muted">
-          Your Captures
-        </h2>
+        <div className="mb-4 flex items-center gap-3">
+          <h2 className="text-sm font-medium text-panel-muted">
+            {isAdmin && showAll ? "All Captures" : "Your Captures"}
+          </h2>
+          {isAdmin && (
+            <>
+              <button
+                onClick={() => {
+                  setShowAll(!showAll);
+                  setOwnerFilter("");
+                }}
+                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs transition ${
+                  showAll
+                    ? "bg-panel-accent/10 text-panel-accent"
+                    : "text-panel-muted hover:text-panel-text"
+                }`}
+                title={showAll ? "Show my captures" : "Show all captures"}
+              >
+                {showAll ? (
+                  <Eye className="h-3.5 w-3.5" />
+                ) : (
+                  <EyeOff className="h-3.5 w-3.5" />
+                )}
+                {showAll ? "All Users" : "Mine Only"}
+              </button>
+              {showAll && (
+                <div className="flex items-center gap-1">
+                  <UserIcon className="h-3.5 w-3.5 text-panel-muted" />
+                  <input
+                    type="text"
+                    value={ownerFilter}
+                    onChange={(e) => setOwnerFilter(e.target.value)}
+                    placeholder="Filter by username..."
+                    className="rounded border border-panel-border bg-panel-bg px-2 py-1 text-xs text-panel-text placeholder-panel-muted/50 focus:border-panel-accent focus:outline-none"
+                  />
+                </div>
+              )}
+            </>
+          )}
+        </div>
         {isLoading ? (
           <p className="text-sm text-panel-muted">Loading...</p>
         ) : !data?.captures?.length ? (
@@ -186,6 +245,11 @@ export function DashboardPage() {
                     <p className="text-xs text-panel-muted">
                       {formatBytes(cap.size_bytes)} · {cap.packet_count} packets ·{" "}
                       {new Date(cap.created_at).toLocaleString()}
+                      {isAdmin && showAll && cap.owner_login && (
+                        <span className="ml-1 text-panel-accent">
+                          · {cap.owner_login}
+                        </span>
+                      )}
                     </p>
                   </div>
                 </div>

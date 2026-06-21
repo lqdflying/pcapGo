@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import RedirectResponse, JSONResponse
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from authlib.integrations.starlette_client import OAuth
@@ -11,7 +11,7 @@ from httpx import AsyncClient, HTTPStatusError
 
 from app.config import settings
 from app.db.session import async_session
-from app.models import User
+from app.models import User, AllowedUser
 from app.core.security import create_access_token, set_jwt_cookie, clear_jwt_cookie, get_current_user
 from app.schemas import UserRead
 import logging
@@ -32,7 +32,7 @@ oauth.register(
 )
 
 
-async def _upsert_user(github_id: int, login: str, email, name, avatar_url) -> User:
+async def _upsert_user(github_id: int, login: str, email, name, avatar_url, role: str = "user") -> User:
     """Insert the user or update existing fields. Race-safe against concurrent
     first logins via ON CONFLICT (github_id) DO UPDATE."""
     stmt = (
@@ -43,6 +43,7 @@ async def _upsert_user(github_id: int, login: str, email, name, avatar_url) -> U
             email=email,
             name=name,
             avatar_url=avatar_url,
+            role=role,
         )
         .on_conflict_do_update(
             index_elements=[User.github_id],
@@ -51,6 +52,7 @@ async def _upsert_user(github_id: int, login: str, email, name, avatar_url) -> U
                 "email": email,
                 "name": name,
                 "avatar_url": avatar_url,
+                "role": role,
             },
         )
         .returning(User)
@@ -133,8 +135,20 @@ async def github_callback(request: Request):
     name = gh_user.get("name")
     avatar_url = gh_user.get("avatar_url")
 
+    async with async_session() as session:
+        result = await session.execute(
+            select(AllowedUser).where(
+                func.lower(AllowedUser.github_login) == func.lower(login)
+            )
+        )
+        allowed = result.scalar_one_or_none()
+
+    if not allowed:
+        logger.warning("Login rejected: %s not in allowed_users", login)
+        return RedirectResponse(url="/login?auth_error=not_allowed")
+
     try:
-        user = await _upsert_user(github_id, login, email, name, avatar_url)
+        user = await _upsert_user(github_id, login, email, name, avatar_url, role=allowed.role)
     except IntegrityError:
         # Extremely rare: lost the ON CONFLICT race against a different unique
         # constraint. Fall back to a plain SELECT.

@@ -13,7 +13,7 @@ from sqlalchemy import select, func
 from app.config import settings
 from app.db.session import async_session
 from app.models import User, Capture, CaptureStatus, Conversation, ChatThread, ChatMessage
-from app.core.security import get_current_user
+from app.core.security import get_current_user, get_capture_for_user
 from app.schemas.chat import (
     ChatThreadCreate,
     ChatThreadRead,
@@ -38,13 +38,7 @@ _CONTEXT_CONV_LIMIT = 40
 
 
 async def _get_owned_capture(session, capture_id: uuid.UUID, user: User) -> Capture:
-    result = await session.execute(
-        select(Capture).where(Capture.id == capture_id, Capture.user_id == user.id)
-    )
-    capture = result.scalar_one_or_none()
-    if not capture:
-        raise HTTPException(status_code=404, detail="Capture not found")
-    return capture
+    return await get_capture_for_user(session, capture_id, user)
 
 
 async def _get_owned_thread(

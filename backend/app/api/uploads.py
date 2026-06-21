@@ -9,13 +9,14 @@ import uuid
 from pathlib import Path
 
 import aiofiles
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, BackgroundTasks, Query
 from sqlalchemy import select, func
+from sqlalchemy.orm import joinedload
 
 from app.config import settings
 from app.db.session import async_session
 from app.models import User, Capture, CaptureStatus
-from app.core.security import get_current_user
+from app.core.security import get_current_user, get_capture_for_user
 from app.schemas.capture import CaptureRead, CaptureList
 from app.services.pcap_parser import parse_pcap
 
@@ -143,24 +144,58 @@ async def upload_capture(
 async def list_captures(
     offset: int = 0,
     limit: int = 100,
+    show_all: bool = Query(False, alias="all"),
+    owner: str = Query("", alias="owner"),
     user: User = Depends(get_current_user),
 ):
-    """List the caller's captures, newest first (server-side paginated)."""
+    """List the caller's captures, newest first (server-side paginated).
+    Admins can pass ?all=true to see all users' captures, optionally
+    filtered by ?owner=<github_login>."""
     limit = max(1, min(limit, 500))
     offset = max(0, offset)
+
+    is_admin = user.role == "super_admin"
+    view_all = is_admin and show_all
+
     async with async_session() as session:
-        total_q = await session.execute(
-            select(func.count()).select_from(Capture).where(Capture.user_id == user.id)
-        )
+        base_q = select(Capture)
+        count_q = select(func.count()).select_from(Capture)
+
+        if view_all:
+            if owner:
+                owner_q = await session.execute(
+                    select(User.id).where(func.lower(User.login) == func.lower(owner))
+                )
+                owner_id = owner_q.scalar_one_or_none()
+                if owner_id:
+                    base_q = base_q.where(Capture.user_id == owner_id)
+                    count_q = count_q.where(Capture.user_id == owner_id)
+                else:
+                    return CaptureList(captures=[], total=0)
+        else:
+            base_q = base_q.where(Capture.user_id == user.id)
+            count_q = count_q.where(Capture.user_id == user.id)
+
+        total_q = await session.execute(count_q)
         total = int(total_q.scalar_one())
         result = await session.execute(
-            select(Capture)
-            .where(Capture.user_id == user.id)
-            .order_by(Capture.created_at.desc())
-            .offset(offset)
-            .limit(limit)
+            base_q.order_by(Capture.created_at.desc()).offset(offset).limit(limit)
         )
-        captures = result.scalars().all()
+        captures = list(result.scalars().all())
+
+        if view_all and captures:
+            user_ids = {c.user_id for c in captures}
+            users_q = await session.execute(
+                select(User.id, User.login).where(User.id.in_(user_ids))
+            )
+            login_map = {row[0]: row[1] for row in users_q.all()}
+            capture_dicts = []
+            for c in captures:
+                d = CaptureRead.model_validate(c)
+                d.owner_login = login_map.get(c.user_id)
+                capture_dicts.append(d)
+            return CaptureList(captures=capture_dicts, total=total)
+
     return CaptureList(captures=list(captures), total=total)
 
 
@@ -169,12 +204,7 @@ async def get_capture(
     capture_id: uuid.UUID, user: User = Depends(get_current_user)
 ):
     async with async_session() as session:
-        result = await session.execute(
-            select(Capture).where(Capture.id == capture_id, Capture.user_id == user.id)
-        )
-        capture = result.scalar_one_or_none()
-    if not capture:
-        raise HTTPException(status_code=404, detail="Capture not found")
+        capture = await get_capture_for_user(session, capture_id, user)
     return capture
 
 
@@ -183,13 +213,7 @@ async def delete_capture(
     capture_id: uuid.UUID, user: User = Depends(get_current_user)
 ):
     async with async_session() as session:
-        result = await session.execute(
-            select(Capture).where(Capture.id == capture_id, Capture.user_id == user.id)
-        )
-        capture = result.scalar_one_or_none()
-        if not capture:
-            raise HTTPException(status_code=404, detail="Capture not found")
-
+        capture = await get_capture_for_user(session, capture_id, user)
         await session.delete(capture)
         await session.commit()
 

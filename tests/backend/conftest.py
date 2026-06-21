@@ -57,6 +57,7 @@ def _patch_settings(monkeypatch):
     monkeypatch.setattr(app.config.settings, "dev_mode", True)
     monkeypatch.setattr(app.config.settings, "cookie_secure", False)
     monkeypatch.setattr(app.config.settings, "session_secret", "test-session-secret")
+    monkeypatch.setattr(app.config.settings, "admin_github_user", "test-admin")
     Path("/tmp/pcap_test_uploads").mkdir(parents=True, exist_ok=True)
 
 
@@ -288,6 +289,54 @@ async def test_conversation(_session_engine, test_capture) -> "Conversation":
             "flags_summary": "SYN,ACK",
         },
     )
+
+
+async def _make_allowed_user(engine, data: dict[str, Any]) -> Any:
+    from app.models import AllowedUser
+    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with factory() as s:
+        au = AllowedUser(**data)
+        s.add(au)
+        await s.commit()
+        await s.refresh(au)
+        return au
+
+
+@pytest.fixture
+def admin_user_data() -> dict[str, Any]:
+    global _counter
+    _counter += 1
+    from datetime import datetime, timezone
+    return {
+        "id": uuid.uuid4(),
+        "github_id": 80000 + _counter,
+        "login": f"admin{_counter}",
+        "email": f"admin{_counter}@example.com",
+        "name": f"Admin {_counter}",
+        "avatar_url": f"https://avatar.example.com/admin{_counter}.png",
+        "role": "super_admin",
+        "created_at": datetime.now(timezone.utc),
+    }
+
+
+@pytest_asyncio.fixture
+async def admin_user(_session_engine, admin_user_data):
+    return await _make_user(_session_engine, admin_user_data)
+
+
+@pytest_asyncio.fixture
+async def test_client_admin(test_client, admin_user):
+    """Test client with get_current_user overridden for an admin user."""
+    from app.core.security import get_current_user
+
+    async def override_get_current_user(request=None):
+        return admin_user
+
+    app = test_client._app
+    app.dependency_overrides[get_current_user] = override_get_current_user
+    test_client._auth_user = admin_user
+    yield test_client
+    app.dependency_overrides.clear()
 
 
 # Backwards-compat aliases
