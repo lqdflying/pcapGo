@@ -32,6 +32,7 @@ def follow_stream_sync(
     """
     import base64
 
+    import app.services.scapy_layers  # noqa: F401 – full protocol dissection
     from scapy.utils import PcapReader
     from scapy.layers.inet import IP, TCP, UDP
     from scapy.layers.inet6 import IPv6
