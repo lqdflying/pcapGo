@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { vi } from "vitest";
 import "@/i18n/i18n";
+import type { SessionPacketsResponse } from "@/api/client";
 
 // Mock window.location for redirects
 const location = {
@@ -115,4 +116,18 @@ export function createMockStatisticsResponse(overrides = {}) {
 }
 export function createMockAnalysisEvent(overrides = {}) {
   return { conversation_id: "conv-1", proto: "tcp", src: "10.0.0.1:443", dst: "10.0.0.2:54321", summary_markdown: "TLS handshake between client and server.", issues: [{ type: "handshake_failure", severity: "high" as const, explanation: "The TLS handshake did not complete." }], ...overrides };
+}
+export function createMockSessionPacketsResponse(overrides: Partial<SessionPacketsResponse> = {}): SessionPacketsResponse {
+  return {
+    items: [
+      createMockPacketSummary({ idx: 0, ts: 1.0, src: "10.0.0.1", dst: "10.0.0.2", info: "443 > 54321 [SYN] Seq=0" }),
+      createMockPacketSummary({ idx: 1, ts: 1.05, src: "10.0.0.2", dst: "10.0.0.1", info: "54321 > 443 [SYN ACK] Seq=0 Ack=1" }),
+    ],
+    total: 2,
+    offset: 0,
+    limit: 200,
+    src_geo: { country: "Local Network", country_code: "LAN", country_flag: "" },
+    dst_geo: { country: "Local Network", country_code: "LAN", country_flag: "" },
+    ...overrides,
+  };
 }

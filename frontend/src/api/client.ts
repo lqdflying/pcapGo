@@ -195,6 +195,21 @@ export interface StatisticsResponse {
   metric: "packets" | "bytes";
 }
 
+export interface GeoInfo {
+  country: string | null;
+  country_code: string | null;
+  country_flag: string | null;
+}
+
+export interface SessionPacketsResponse {
+  items: PacketSummary[];
+  total: number;
+  offset: number;
+  limit: number;
+  src_geo: GeoInfo;
+  dst_geo: GeoInfo;
+}
+
 export interface FollowStreamSegment {
   direction: "client" | "server";
   ts: number;
@@ -528,6 +543,31 @@ export async function getFollowStream(
     proto: params.proto,
   });
   const { data } = await api.get(`/api/captures/${captureId}/follow?${query}`);
+  return data;
+}
+
+export async function getSessionPackets(
+  captureId: string,
+  params: {
+    src_ip: string;
+    src_port: number;
+    dst_ip: string;
+    dst_port: number;
+    proto: string;
+    offset?: number;
+    limit?: number;
+  }
+): Promise<SessionPacketsResponse> {
+  const query = new URLSearchParams({
+    src_ip: params.src_ip,
+    src_port: String(params.src_port),
+    dst_ip: params.dst_ip,
+    dst_port: String(params.dst_port),
+    proto: params.proto,
+  });
+  if (params.offset != null) query.set("offset", String(params.offset));
+  if (params.limit != null) query.set("limit", String(params.limit));
+  const { data } = await api.get(`/api/captures/${captureId}/session-packets?${query}`);
   return data;
 }
 

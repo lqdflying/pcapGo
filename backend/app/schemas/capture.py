@@ -183,6 +183,21 @@ class GeoIPStatus(BaseModel):
     max_size_bytes: int
 
 
+class GeoInfo(BaseModel):
+    country: str | None = None
+    country_code: str | None = None
+    country_flag: str | None = None
+
+
+class SessionPacketsResponse(BaseModel):
+    items: list[PacketSummary]
+    total: int
+    offset: int
+    limit: int
+    src_geo: GeoInfo = Field(default_factory=GeoInfo)
+    dst_geo: GeoInfo = Field(default_factory=GeoInfo)
+
+
 class StatisticsResponse(BaseModel):
     capture_id: uuid.UUID
     packet_count: int
