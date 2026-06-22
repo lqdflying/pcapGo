@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import struct
 import uuid
 from collections import OrderedDict
@@ -25,6 +26,8 @@ from app.schemas.capture import (
     PacketDetail,
     PacketListResponse,
     FollowStreamResponse,
+    GeoInfo,
+    SessionPacketsResponse,
 )
 from app.services.follow import follow_stream_sync
 from app.services.packet_fields import read_packet_at, packet_from_raw_hex, enrich_layers_with_fields
@@ -57,6 +60,92 @@ _FILTER_CACHE_MAX_BYTES = 64 * 1024 * 1024  # 64 MB
 _FILTER_CACHE: OrderedDict[tuple[str, int, int, str, str], array.array] = OrderedDict()
 _FILTER_CACHE_BYTES = 0
 
+# ── Session-filter cache ──────────────────────────────────────────────────
+_SESSION_CACHE_MAX_BYTES = 32 * 1024 * 1024  # 32 MB
+_SESSION_CACHE: OrderedDict[tuple, array.array] = OrderedDict()
+_SESSION_CACHE_BYTES = 0
+
+_PORT_RE = re.compile(r"^(\d+)\s*>\s*(\d+)")
+
+
+def _parse_ports_from_info(info: str) -> tuple[int, int]:
+    m = _PORT_RE.match(info)
+    if m:
+        return int(m.group(1)), int(m.group(2))
+    return 0, 0
+
+
+def _session_matches(
+    s: dict, src_ip: str, src_port: int, dst_ip: str, dst_port: int, proto: str
+) -> bool:
+    pkt_proto = (s.get("proto") or "").lower()
+    if pkt_proto != proto:
+        return False
+    pkt_src = s.get("src", "")
+    pkt_dst = s.get("dst", "")
+    fwd = pkt_src == src_ip and pkt_dst == dst_ip
+    rev = pkt_src == dst_ip and pkt_dst == src_ip
+    if not fwd and not rev:
+        return False
+    if src_port == 0 and dst_port == 0:
+        return True
+    sport, dport = _parse_ports_from_info(s.get("info", ""))
+    if fwd:
+        return sport == src_port and dport == dst_port
+    return sport == dst_port and dport == src_port
+
+
+def _scan_session_indices_sync(
+    offsets_path: str,
+    summary_path: str,
+    src_ip: str,
+    src_port: int,
+    dst_ip: str,
+    dst_port: int,
+    proto: str,
+) -> array.array:
+    try:
+        stat = os.stat(offsets_path)
+    except OSError:
+        raise HTTPException(status_code=500, detail="Packet index file missing")
+
+    cache_key = (offsets_path, stat.st_mtime_ns, stat.st_size, src_ip, src_port, dst_ip, dst_port, proto)
+    cached = _SESSION_CACHE.get(cache_key)
+    if cached is not None:
+        _SESSION_CACHE.move_to_end(cache_key)
+        return cached
+
+    global _SESSION_CACHE_BYTES
+
+    for k in [key for key in _SESSION_CACHE if key[0] == offsets_path]:
+        arr = _SESSION_CACHE.pop(k)
+        _SESSION_CACHE_BYTES -= max(0, len(arr) * 4 + 128)
+
+    matching = array.array("I")
+    try:
+        with open(summary_path, encoding="utf-8") as f:
+            idx = 0
+            for line in f:
+                try:
+                    s = json.loads(line)
+                except json.JSONDecodeError:
+                    idx += 1
+                    continue
+                if _session_matches(s, src_ip, src_port, dst_ip, dst_port, proto):
+                    matching.append(idx)
+                idx += 1
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail="Packet index file missing")
+
+    new_bytes = max(0, len(matching) * 4 + 128)
+    while _SESSION_CACHE and _SESSION_CACHE_BYTES + new_bytes > _SESSION_CACHE_MAX_BYTES:
+        _, old = _SESSION_CACHE.popitem(last=False)
+        _SESSION_CACHE_BYTES -= max(0, len(old) * 4 + 128)
+
+    _SESSION_CACHE[cache_key] = matching
+    _SESSION_CACHE_BYTES += new_bytes
+    return matching
+
 
 def _evict_index(index_path: str) -> None:
     """Drop every cached entry for the given index path (any mtime/size).
@@ -66,11 +155,15 @@ def _evict_index(index_path: str) -> None:
     global _FILTER_CACHE_BYTES
     for k in [key for key in _INDEX_CACHE if key[0] == index_path]:
         _INDEX_CACHE.pop(k, None)
-    # Also evict any proto-filter caches keyed on the matching offsets path.
+    # Also evict any proto-filter and session caches keyed on the matching offsets path.
     offsets_path = index_path.replace(".index.json", ".offsets.bin")
     for k in [key for key in _FILTER_CACHE if key[0] == offsets_path]:
         arr = _FILTER_CACHE.pop(k)
         _FILTER_CACHE_BYTES -= max(0, len(arr) * 4 + 128)
+    global _SESSION_CACHE_BYTES
+    for k in [key for key in _SESSION_CACHE if key[0] == offsets_path]:
+        arr = _SESSION_CACHE.pop(k)
+        _SESSION_CACHE_BYTES -= max(0, len(arr) * 4 + 128)
 
 
 async def _get_capture(capture_id: uuid.UUID, user: User):
@@ -409,6 +502,66 @@ async def get_packet_detail(
         layers=layers,
         raw_hex=record.get("raw_hex", ""),
         raw_offset=record.get("raw_offset", 0),
+    )
+
+
+@router.get("/{capture_id}/session-packets", response_model=SessionPacketsResponse)
+async def session_packets(
+    capture_id: uuid.UUID,
+    src_ip: str = Query(...),
+    src_port: int = Query(..., ge=0, le=65535),
+    dst_ip: str = Query(...),
+    dst_port: int = Query(..., ge=0, le=65535),
+    proto: str = Query(...),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(200, ge=1, le=10000),
+    user: User = Depends(get_current_user),
+):
+    capture = await _get_capture(capture_id, user)
+    _load_packet_index(capture)
+    offsets_path = _offsets_path_for(capture)
+    summary_path = _summary_path_for(capture)
+    proto_l = proto.strip().lower()
+
+    matching = await asyncio.to_thread(
+        _scan_session_indices_sync,
+        offsets_path,
+        summary_path,
+        src_ip,
+        src_port,
+        dst_ip,
+        dst_port,
+        proto_l,
+    )
+    total = len(matching)
+    page_indices = matching[offset : offset + limit]
+
+    items: list[PacketSummary] = []
+    for i in page_indices:
+        off = _read_single_offset(offsets_path, i)
+        if off is None:
+            continue
+        _, summary_offset = off
+        s = _read_summary_at(summary_path, summary_offset)
+        if s:
+            items.append(_summary_to_packet_summary(s))
+
+    from app.services.geoip import lookup_country, country_code_to_flag
+
+    def _make_geo(ip: str) -> GeoInfo:
+        result = lookup_country(ip)
+        if result is None:
+            return GeoInfo()
+        code, name = result
+        return GeoInfo(country=name, country_code=code, country_flag=country_code_to_flag(code))
+
+    return SessionPacketsResponse(
+        items=items,
+        total=total,
+        offset=offset,
+        limit=limit,
+        src_geo=_make_geo(src_ip),
+        dst_geo=_make_geo(dst_ip),
     )
 
 

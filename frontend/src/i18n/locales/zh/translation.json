@@ -203,6 +203,26 @@
     "noCountries": "暂无国家数据",
     "countryStatsHint": "国家统计按端点参与聚合。一个会话可按两个端点分别计入，因此当双方位于同一国家时，总数可能高于捕获级别的包数或会话数。"
   },
+  "session": {
+    "title": "会话视图",
+    "sequenceDiagram": "会话时序图",
+    "dataFlow": "会话数据流",
+    "duration": "持续时间",
+    "totalPackets": "总包数",
+    "totalBytes": "总字节数",
+    "forward": "正向",
+    "reverse": "反向",
+    "noPackets": "未找到该会话的数据包",
+    "loading": "加载会话数据...",
+    "viewSession": "会话",
+    "srcPort": "源端口",
+    "dstPort": "目标端口",
+    "size": "大小",
+    "direction": "方向",
+    "relativeTime": "时间",
+    "index": "序号",
+    "info": "信息"
+  },
   "captureCommand": {
     "platform": "平台",
     "tcpdumpPlatform": "tcpdump (Linux/macOS)",

@@ -203,6 +203,26 @@
     "noCountries": "No country data available",
     "countryStatsHint": "Country rows aggregate endpoint participation. A conversation can contribute once per endpoint, so totals can exceed capture-wide packet or session counts when both endpoints are in the same country."
   },
+  "session": {
+    "title": "Session View",
+    "sequenceDiagram": "Sequence Diagram",
+    "dataFlow": "Data Flow",
+    "duration": "Duration",
+    "totalPackets": "Total Packets",
+    "totalBytes": "Total Bytes",
+    "forward": "Forward",
+    "reverse": "Reverse",
+    "noPackets": "No packets found for this session",
+    "loading": "Loading session data...",
+    "viewSession": "Session",
+    "srcPort": "Src Port",
+    "dstPort": "Dst Port",
+    "size": "Size",
+    "direction": "Direction",
+    "relativeTime": "Time",
+    "index": "Index",
+    "info": "Info"
+  },
   "captureCommand": {
     "platform": "Platform",
     "tcpdumpPlatform": "tcpdump (Linux/macOS)",

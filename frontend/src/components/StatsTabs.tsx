@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, Globe, Layers, Flag, BarChart3 } from "lucide-react";
+import { Loader2, Globe, Layers, Flag, BarChart3, ArrowLeftRight } from "lucide-react";
 import type {
   StatisticsResponse,
   ConversationStats,
@@ -9,6 +9,7 @@ import { IPStatsView } from "./stats/IPStatsView";
 import { ProtocolStatsView } from "./stats/ProtocolStatsView";
 import { CountryStatsView } from "./stats/CountryStatsView";
 import { IOGraphView } from "./stats/IOGraphView";
+import { ConversationsView } from "./stats/ConversationsView";
 
 interface Props {
   stats: StatisticsResponse | null;
@@ -16,16 +17,18 @@ interface Props {
   onSelectEndpoint?: (ip: string) => void;
   onSelectConversation?: (conv: ConversationStats) => void;
   onFollowConversation?: (conv: ConversationStats) => void;
+  onViewSession?: (conv: ConversationStats) => void;
   onSelectProtocol?: (proto: string) => void;
   onBucketChange?: (bucketSeconds: number, metric: "packets" | "bytes") => void;
 }
 
-type StatsView = "ip" | "protocol" | "country" | "io";
+type StatsView = "ip" | "protocol" | "country" | "conversations" | "io";
 
 const SIDEBAR_ITEMS: { id: StatsView; labelKey: string; Icon: typeof Globe }[] = [
   { id: "ip", labelKey: "stats.ipStats", Icon: Globe },
   { id: "protocol", labelKey: "stats.protocolStats", Icon: Layers },
   { id: "country", labelKey: "stats.countryStats", Icon: Flag },
+  { id: "conversations", labelKey: "stats.conversations", Icon: ArrowLeftRight },
   { id: "io", labelKey: "stats.ioGraph", Icon: BarChart3 },
 ];
 
@@ -34,6 +37,8 @@ export function StatsTabs({
   loading,
   onSelectEndpoint,
   onSelectProtocol,
+  onFollowConversation,
+  onViewSession,
   onBucketChange,
 }: Props) {
   const { t } = useTranslation();
@@ -94,6 +99,12 @@ export function StatsTabs({
           />
         ) : view === "country" ? (
           <CountryStatsView entries={stats.country_stats ?? []} />
+        ) : view === "conversations" ? (
+          <ConversationsView
+            conversations={stats.conversations ?? []}
+            onViewSession={onViewSession}
+            onFollowConversation={onFollowConversation}
+          />
         ) : (
           <IOGraphView
             buckets={stats.io_buckets}

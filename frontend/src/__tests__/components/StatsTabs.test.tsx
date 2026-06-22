@@ -120,7 +120,27 @@ describe("StatsTabs", () => {
     expect(screen.getByText("IP Statistics")).toBeInTheDocument();
     expect(screen.getByText("Protocol Statistics")).toBeInTheDocument();
     expect(screen.getByText("Country Statistics")).toBeInTheDocument();
+    expect(screen.getByText("Conversations")).toBeInTheDocument();
     expect(screen.getByText("IO Graph")).toBeInTheDocument();
+  });
+
+  it("switches to Conversations view", () => {
+    const stats = createMockStatisticsResponse();
+    render(<StatsTabs stats={stats} loading={false} />);
+    fireEvent.click(screen.getByText("Conversations"));
+    // Should show conversation data from the mock stats response
+    expect(screen.getByText("10.0.0.1:443")).toBeInTheDocument();
+    expect(screen.getByText("10.0.0.2:54321")).toBeInTheDocument();
+  });
+
+  it("calls onViewSession from Conversations view", () => {
+    const stats = createMockStatisticsResponse();
+    const onViewSession = vi.fn();
+    render(<StatsTabs stats={stats} loading={false} onViewSession={onViewSession} />);
+    fireEvent.click(screen.getByText("Conversations"));
+    const sessionButtons = screen.getAllByText("Session");
+    fireEvent.click(sessionButtons[0]);
+    expect(onViewSession).toHaveBeenCalledWith(stats.conversations[0]);
   });
 
   it("shows no countries message when country_stats is empty", () => {

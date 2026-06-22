@@ -39,6 +39,7 @@ import { StatsTabs } from "../components/StatsTabs";
 import { CaptureCommandPanel } from "../components/CaptureCommandPanel";
 import { FloatingWindow } from "../components/FloatingWindow";
 import { FollowStream } from "../components/FollowStream";
+import { SessionView } from "../components/SessionView";
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200, 500];
 const PROTOCOL_OPTIONS: { value: string; label?: string; labelKey?: string }[] = [
@@ -109,6 +110,7 @@ export function CapturePage() {
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   const [followConv, setFollowConv] = useState<ConversationStats | null>(null);
+  const [sessionConv, setSessionConv] = useState<ConversationStats | null>(null);
   const [explainText, setExplainText] = useState("");
   const [explainStreaming, setExplainStreaming] = useState(false);
   const [explainError, setExplainError] = useState<string | null>(null);
@@ -544,6 +546,7 @@ export function CapturePage() {
                 onSelectEndpoint={handleSelectEndpoint}
                 onSelectConversation={handleSelectConversation}
                 onFollowConversation={setFollowConv}
+                onViewSession={setSessionConv}
                 onSelectProtocol={handleSelectProtocol}
                 onBucketChange={handleBucketChange}
               />
@@ -570,6 +573,14 @@ export function CapturePage() {
           captureId={id!}
           conversation={followConv}
           onClose={() => setFollowConv(null)}
+        />
+      )}
+
+      {sessionConv && (
+        <SessionView
+          captureId={id!}
+          conversation={sessionConv}
+          onClose={() => setSessionConv(null)}
         />
       )}
     </div>
