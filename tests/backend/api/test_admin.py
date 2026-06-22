@@ -196,6 +196,37 @@ class TestAllowlistEnforcement:
 
 
 @pytest.mark.integration
+class TestAdminGeoIP:
+    async def test_non_admin_cannot_access_geoip(self, test_client_authenticated):
+        response = await test_client_authenticated.get("/api/admin/geoip")
+        assert response.status_code == 403
+
+    async def test_admin_can_get_geoip_status(self, test_client_admin):
+        response = await test_client_admin.get("/api/admin/geoip")
+        assert response.status_code == 200
+        body = response.json()
+        assert "available" in body
+        assert isinstance(body["available"], bool)
+        assert "file_path" in body
+
+    async def test_geoip_update_requires_url(self, test_client_admin):
+        response = await test_client_admin.post(
+            "/api/admin/geoip/update",
+            json={"url": ""},
+        )
+        assert response.status_code == 400
+
+    async def test_geoip_upload_rejects_non_mmdb(self, test_client_admin):
+        import io
+        files = {"file": ("test.txt", io.BytesIO(b"not a database"), "text/plain")}
+        response = await test_client_admin.post(
+            "/api/admin/geoip/upload",
+            files=files,
+        )
+        assert response.status_code == 400
+
+
+@pytest.mark.integration
 class TestAdminCaptureAccess:
     async def test_admin_can_list_all_captures_with_owner_filter(
         self, test_client_admin, _session_engine

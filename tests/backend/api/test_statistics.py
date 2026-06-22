@@ -210,6 +210,58 @@ class TestGetStatistics:
         finally:
             pass
 
+    async def test_statistics_has_ip_stats(
+        self, test_client_authenticated, test_capture, test_conversation
+    ):
+        response = await test_client_authenticated.get(
+            f"/api/captures/{test_capture.id}/statistics"
+        )
+        data = response.json()
+        assert "ip_stats" in data
+        assert isinstance(data["ip_stats"], list)
+        assert len(data["ip_stats"]) >= 2
+        by_ip = {e["ip"]: e for e in data["ip_stats"]}
+        assert test_conversation.src_ip in by_ip
+        assert test_conversation.dst_ip in by_ip
+        src = by_ip[test_conversation.src_ip]
+        assert src["country_code"] == "LAN"
+        assert src["country"] == "Local Network"
+        assert src["total_sent_packets"] == 3
+        assert src["total_recv_packets"] == 2
+        assert 443 in src["ports"]
+
+    async def test_statistics_has_proto_stats(
+        self, test_client_authenticated, test_capture, test_conversation
+    ):
+        response = await test_client_authenticated.get(
+            f"/api/captures/{test_capture.id}/statistics"
+        )
+        data = response.json()
+        assert "proto_stats" in data
+        assert isinstance(data["proto_stats"], list)
+        assert len(data["proto_stats"]) >= 1
+        by_proto = {e["proto"]: e for e in data["proto_stats"]}
+        assert "TLS" in by_proto
+        tls = by_proto["TLS"]
+        assert tls["total_packets"] == test_conversation.packet_count
+        assert tls["session_count"] == 1
+        assert tls["percentage_packets"] > 0
+
+    async def test_statistics_has_country_stats(
+        self, test_client_authenticated, test_capture, test_conversation
+    ):
+        response = await test_client_authenticated.get(
+            f"/api/captures/{test_capture.id}/statistics"
+        )
+        data = response.json()
+        assert "country_stats" in data
+        assert isinstance(data["country_stats"], list)
+        assert len(data["country_stats"]) >= 1
+        lan = next((c for c in data["country_stats"] if c["country_code"] == "LAN"), None)
+        assert lan is not None
+        assert lan["ip_count"] == 2
+        assert lan["total_packets"] > 0
+
     async def test_single_packet_conversation_has_io(
         self, test_client_authenticated, test_capture, _session_engine
     ):

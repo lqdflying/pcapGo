@@ -100,6 +100,16 @@ export function createMockStatisticsResponse(overrides = {}) {
     io_buckets: Array.from({ length: 10 }, (_, i) => ({ ts_start: i * 0.25, packet_count: 1, byte_count: 100 })),
     bucket_seconds: 1,
     metric: "packets",
+    ip_stats: [
+      { ip: "10.0.0.1", country: "Local Network", country_code: "LAN", earliest_time: 0, latest_time: 2.5, ports: [443], protocols: ["TLS"], total_sent_packets: 10, total_recv_packets: 0, total_sent_bytes: 1000, total_recv_bytes: 0, tcp_session_count: 1, udp_session_count: 0 },
+      { ip: "10.0.0.2", country: "Local Network", country_code: "LAN", earliest_time: 0, latest_time: 2.5, ports: [54321], protocols: ["TLS"], total_sent_packets: 0, total_recv_packets: 10, total_sent_bytes: 0, total_recv_bytes: 1000, tcp_session_count: 0, udp_session_count: 0 },
+    ],
+    proto_stats: [
+      { proto: "TLS", total_packets: 10, total_bytes: 1000, session_count: 1, avg_packet_size: 100, percentage_packets: 100, percentage_bytes: 100, first_seen: 0, last_seen: 2.5 },
+    ],
+    country_stats: [
+      { country: "Local Network", country_code: "LAN", ip_count: 2, total_packets: 10, total_bytes: 1000, session_count: 1 },
+    ],
     ...overrides,
   };
 }
