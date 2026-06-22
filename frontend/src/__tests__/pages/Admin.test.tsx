@@ -51,8 +51,10 @@ describe("AdminPage", () => {
     mockGetGeoIPStatus.mockResolvedValue({
       available: false,
       file_path: "data/GeoLite2-Country.mmdb",
+      file_name: "GeoLite2-Country.mmdb",
       file_size: null,
       last_modified: null,
+      max_size_bytes: 104857600,
     });
     mockListAllowedUsers.mockResolvedValue({
       users: [
@@ -193,5 +195,40 @@ describe("AdminPage", () => {
       await screen.findByText("Failed to load allowed users. Please try again.")
     ).toBeInTheDocument();
     expect(screen.queryByText("No users configured. Add a GitHub username above.")).not.toBeInTheDocument();
+  });
+
+  it("shows GeoIP status metadata and safe download hint", async () => {
+    mockGetGeoIPStatus.mockResolvedValue({
+      available: true,
+      file_path: "data/GeoLite2-Country.mmdb",
+      file_name: "GeoLite2-Country.mmdb",
+      file_size: 7340032,
+      last_modified: "2026-06-21T00:00:00Z",
+      max_size_bytes: 104857600,
+    });
+    await act(async () => {
+      renderAdmin();
+    });
+
+    expect(await screen.findByText("GeoIP Database")).toBeInTheDocument();
+    expect(screen.getByText(/GeoLite2-Country\.mmdb/)).toBeInTheDocument();
+    expect(screen.getByText(/Max size: 100 MB/)).toBeInTheDocument();
+    expect(screen.getByText(/Only public http\(s\) URLs are allowed/)).toBeInTheDocument();
+  });
+
+  it("shows GeoIP mutation errors", async () => {
+    mockUpdateGeoIPDatabase.mockRejectedValue({
+      response: { data: { detail: "GeoIP download URL must be a public http(s) URL" } },
+    });
+    await act(async () => {
+      renderAdmin();
+    });
+
+    fireEvent.change(await screen.findByPlaceholderText("https://example.com/GeoLite2-Country.mmdb"), {
+      target: { value: "http://127.0.0.1/GeoLite2-Country.mmdb" },
+    });
+    fireEvent.click(screen.getByText("Download"));
+
+    expect(await screen.findByText("GeoIP download URL must be a public http(s) URL")).toBeInTheDocument();
   });
 });

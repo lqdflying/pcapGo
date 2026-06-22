@@ -25,6 +25,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/ .
 COPY version.json /app/version.json
+COPY assets/GeoLite2-Country.mmdb /app/data/GeoLite2-Country.mmdb
 COPY --from=frontend-build /app/dist /app/frontend-dist
 
 RUN if [ -n "$BUILD_DATE" ]; then \

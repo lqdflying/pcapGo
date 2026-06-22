@@ -172,8 +172,10 @@ export interface CountryStatsEntry {
 export interface GeoIPStatus {
   available: boolean;
   file_path: string;
+  file_name: string;
   file_size: number | null;
   last_modified: string | null;
+  max_size_bytes: number;
 }
 
 export interface StatisticsResponse {

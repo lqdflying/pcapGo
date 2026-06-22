@@ -97,10 +97,12 @@
     "removeConfirm": "Remove \"{{login}}\" from allowed users?",
     "addedBy": "Added by {{name}}",
     "geoipManagement": "GeoIP Database",
-    "geoipDescription": "Manage the GeoIP database for country-based statistics",
+    "geoipDescription": "Manage the GeoLite2 Country database for country-based statistics. A bundled database is available in the image; uploads or downloads replace the runtime copy.",
     "geoipAvailable": "Available",
     "geoipUnavailable": "Not installed",
+    "geoipFileName": "Database",
     "geoipFileSize": "File size",
+    "geoipMaxSize": "Max size",
     "geoipLastModified": "Last modified",
     "geoipUpdateUrl": "Download URL",
     "geoipUpdateUrlPlaceholder": "https://example.com/GeoLite2-Country.mmdb",
@@ -110,7 +112,8 @@
     "geoipUploading": "Uploading...",
     "geoipUpdateSuccess": "GeoIP database updated successfully",
     "geoipUpdateFailed": "Failed to update GeoIP database",
-    "geoipUploadFailed": "Failed to upload GeoIP database"
+    "geoipUploadFailed": "Failed to upload GeoIP database",
+    "geoipSafetyHint": "Only public http(s) URLs are allowed. Private, loopback, link-local, and reserved addresses are rejected."
   },
   "uploader": {
     "uploadCapture": "Upload packet capture",
@@ -184,7 +187,7 @@
     "recvBytes": "Rx Bytes",
     "tcpSessions": "TCP Sessions",
     "udpSessions": "UDP Sessions",
-    "sessionCount": "Sessions",
+    "sessionCount": "Endpoint Sessions",
     "avgPacketSize": "Avg Size",
     "pctPackets": "% Packets",
     "pctBytes": "% Bytes",
@@ -197,7 +200,8 @@
     "protoCount": "{{count}} protocols",
     "countryCount": "{{count}} countries",
     "ipStatsCount": "{{count}} IPs",
-    "noCountries": "No country data available"
+    "noCountries": "No country data available",
+    "countryStatsHint": "Country rows aggregate endpoint participation. A conversation can contribute once per endpoint, so totals can exceed capture-wide packet or session counts when both endpoints are in the same country."
   },
   "captureCommand": {
     "platform": "Platform",

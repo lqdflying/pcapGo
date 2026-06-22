@@ -97,10 +97,12 @@
     "removeConfirm": "从允许列表中移除 \"{{login}}\"？",
     "addedBy": "由 {{name}} 添加",
     "geoipManagement": "GeoIP 数据库",
-    "geoipDescription": "管理用于国家统计的 GeoIP 数据库",
+    "geoipDescription": "管理用于国家统计的 GeoLite2 Country 数据库。镜像内置一个数据库；上传或下载会替换运行时副本。",
     "geoipAvailable": "可用",
     "geoipUnavailable": "未安装",
+    "geoipFileName": "数据库",
     "geoipFileSize": "文件大小",
+    "geoipMaxSize": "最大大小",
     "geoipLastModified": "最后修改",
     "geoipUpdateUrl": "下载地址",
     "geoipUpdateUrlPlaceholder": "https://example.com/GeoLite2-Country.mmdb",
@@ -110,7 +112,8 @@
     "geoipUploading": "上传中...",
     "geoipUpdateSuccess": "GeoIP 数据库更新成功",
     "geoipUpdateFailed": "更新 GeoIP 数据库失败",
-    "geoipUploadFailed": "上传 GeoIP 数据库失败"
+    "geoipUploadFailed": "上传 GeoIP 数据库失败",
+    "geoipSafetyHint": "仅允许公共 http(s) 地址。私有、回环、链路本地和保留地址会被拒绝。"
   },
   "uploader": {
     "uploadCapture": "上传数据包捕获",
@@ -182,9 +185,9 @@
     "recvPackets": "接收包数",
     "sentBytes": "发送字节",
     "recvBytes": "接收字节",
-    "tcpSessions": "TCP会话数",
-    "udpSessions": "UDP会话数",
-    "sessionCount": "会话数",
+    "tcpSessions": "TCP会话参与数",
+    "udpSessions": "UDP会话参与数",
+    "sessionCount": "端点会话参与数",
     "avgPacketSize": "平均大小",
     "pctPackets": "包数占比",
     "pctBytes": "字节占比",
@@ -197,7 +200,8 @@
     "protoCount": "{{count}} 个协议",
     "countryCount": "{{count}} 个国家",
     "ipStatsCount": "{{count}} 个IP",
-    "noCountries": "暂无国家数据"
+    "noCountries": "暂无国家数据",
+    "countryStatsHint": "国家统计按端点参与聚合。一个会话可按两个端点分别计入，因此当双方位于同一国家时，总数可能高于捕获级别的包数或会话数。"
   },
   "captureCommand": {
     "platform": "平台",

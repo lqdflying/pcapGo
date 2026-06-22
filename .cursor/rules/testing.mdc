@@ -22,13 +22,15 @@ tests/backend/
 │   ├── test_uploads.py / test_packets.py / test_statistics.py
 │   ├── test_analysis.py / test_chat.py / test_follow.py / test_export.py
 │   ├── test_capture_command.py   # POST /api/capture-command/generate (LLM-gated SSE)
-│   └── test_admin.py             # allowlist/admin API, role sync, revocation, admin capture listing
+│   └── test_admin.py             # allowlist/admin API, role sync, GeoIP management, revocation, admin capture listing
 ├── models/         # Model CRUD tests (SQLAlchemy async sessions)
 ├── services/       # Service-level tests (currently empty)
 ├── unit/           # Pure unit tests (no DB)
 │   ├── test_llm.py / test_explain_llm.py
 │   ├── test_capture_command_llm.py
 │   ├── test_packet_fields.py     # extract_layer_fields, packet_from_raw_hex (O(1)), enrich guard
+│   ├── test_geoip.py             # GeoIP URL safety, size/validation, private classification, real asset check
+│   ├── test_docker_assets.py     # Dockerfile copies assets/GeoLite2-Country.mmdb into the runtime image
 │   ├── test_serialize_packets.py
 │   └── test_schemas_field_node.py
 ├── conftest.py     # Shared fixtures (session-scoped engine, per-test DELETE)
@@ -55,6 +57,12 @@ tests/backend/
 6. Use `test_client_authenticated` for auth-required endpoints.
 7. Use `test_client` for public endpoints.
 8. Use `auth_user`, `test_capture`, `test_conversation` fixtures for test data.
+
+### GeoIP Tests
+- Real GeoIP database validation expects `assets/GeoLite2-Country.mmdb` to exist. Download **GeoLite2-Country** in GeoIP2 Binary format from MaxMind, extract the `.tar.gz`, and place the `.mmdb` at that path.
+- GeoIP unit tests cover URL SSRF protections, upload/download size caps, invalid database validation, RFC1918/unique-local classification, and the Dockerfile copy rule for the built-in database.
+- Admin API GeoIP tests belong in `tests/backend/api/test_admin.py`; they should assert admin-only access, invalid URL rejection, invalid `.mmdb` rejection, and stable client-facing error details.
+- Statistics tests should assert TCP/UDP session counts as endpoint participation counts and country rows as endpoint-participation aggregates.
 
 ### Pcap Upload Tests
 Use `make_minimal_pcap_bytes()` helper (defined in `tests/backend/api/test_uploads.py`) to generate valid minimal pcap bytes:

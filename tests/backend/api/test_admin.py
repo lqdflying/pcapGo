@@ -225,6 +225,30 @@ class TestAdminGeoIP:
         )
         assert response.status_code == 400
 
+    async def test_geoip_upload_rejects_invalid_mmdb(self, test_client_admin):
+        import io
+        files = {
+            "file": (
+                "GeoLite2-Country.mmdb",
+                io.BytesIO(b"not a database"),
+                "application/octet-stream",
+            )
+        }
+        response = await test_client_admin.post(
+            "/api/admin/geoip/upload",
+            files=files,
+        )
+        assert response.status_code == 400
+        assert "valid GeoIP2 Country" in response.json()["detail"]
+
+    async def test_geoip_update_rejects_private_url(self, test_client_admin):
+        response = await test_client_admin.post(
+            "/api/admin/geoip/update",
+            json={"url": "http://127.0.0.1/GeoLite2-Country.mmdb"},
+        )
+        assert response.status_code == 400
+        assert "public http(s) URL" in response.json()["detail"]
+
 
 @pytest.mark.integration
 class TestAdminCaptureAccess:

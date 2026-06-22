@@ -66,6 +66,7 @@ export function CountryStatsView({
 
   return (
     <div>
+      <p className="mb-2 text-[11px] text-panel-muted">{t("stats.countryStatsHint")}</p>
       <FilterBox
         value={filter}
         onChange={setFilter}

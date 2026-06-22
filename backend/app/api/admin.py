@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import logging
-import shutil
+import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
@@ -179,6 +180,10 @@ class GeoIPUpdateRequest(BaseModel):
     url: str
 
 
+def _geoip_http_error(exc: geoip.GeoIPError) -> HTTPException:
+    return HTTPException(status_code=exc.status_code, detail=exc.public_detail)
+
+
 @router.post("/geoip/update", response_model=GeoIPStatus)
 async def update_geoip_database(
     body: GeoIPUpdateRequest,
@@ -188,10 +193,9 @@ async def update_geoip_database(
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
     try:
-        geoip.download_database(url)
-    except Exception as exc:
-        logger.error("GeoIP download failed: %s", exc)
-        raise HTTPException(status_code=400, detail=f"Download failed: {exc}")
+        await asyncio.to_thread(geoip.download_database, url)
+    except geoip.GeoIPError as exc:
+        raise _geoip_http_error(exc) from exc
     return GeoIPStatus(**geoip.get_status())
 
 
@@ -200,18 +204,33 @@ async def upload_geoip_database(
     file: UploadFile = File(...),
     admin: User = Depends(require_admin),
 ):
-    if not file.filename or not file.filename.endswith(".mmdb"):
+    if not file.filename or not file.filename.lower().endswith(".mmdb"):
         raise HTTPException(status_code=400, detail="File must be a .mmdb file")
+
     dest = settings.geoip_db_path
     dest.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dest.with_suffix(".mmdb.tmp")
+    max_bytes = geoip.max_database_bytes()
+    written = 0
+    tmp_path = None
     try:
-        with open(tmp, "wb") as f:
-            while chunk := await file.read(8192):
-                f.write(chunk)
-        shutil.move(str(tmp), str(dest))
+        with tempfile.NamedTemporaryFile(
+            dir=dest.parent, suffix=".mmdb.upload.tmp", delete=False
+        ) as tmp:
+            tmp_path = tmp.name
+            while chunk := await file.read(1024 * 1024):
+                written += len(chunk)
+                if written > max_bytes:
+                    raise geoip.GeoIPSizeExceededError(max_bytes)
+                tmp.write(chunk)
+        await asyncio.to_thread(geoip.install_database_file, Path(tmp_path), dest)
+    except geoip.GeoIPError as exc:
+        if tmp_path:
+            Path(tmp_path).unlink(missing_ok=True)
+        raise _geoip_http_error(exc) from exc
     except Exception:
-        tmp.unlink(missing_ok=True)
+        if tmp_path:
+            Path(tmp_path).unlink(missing_ok=True)
         raise
-    geoip.reload_database()
+    finally:
+        await file.close()
     return GeoIPStatus(**geoip.get_status())

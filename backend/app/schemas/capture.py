@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class CaptureRead(BaseModel):
@@ -36,8 +36,8 @@ class LayerNode(BaseModel):
     summary: str
     offset: int  # byte offset within the packet (0-based)
     length: int  # byte length of this layer
-    fields: list[FieldNode] = []
-    children: list["LayerNode"] = []
+    fields: list[FieldNode] = Field(default_factory=list)
+    children: list["LayerNode"] = Field(default_factory=list)
 
 
 class PacketSummary(BaseModel):
@@ -107,7 +107,7 @@ class ProtocolHierarchy(BaseModel):
     name: str
     packet_count: int
     byte_count: int
-    children: list["ProtocolHierarchy"] = []
+    children: list["ProtocolHierarchy"] = Field(default_factory=list)
 
 
 class IOBucket(BaseModel):
@@ -141,8 +141,8 @@ class IPStatsEntry(BaseModel):
     country_code: str | None = None
     earliest_time: float = 0.0
     latest_time: float = 0.0
-    ports: list[int] = []
-    protocols: list[str] = []
+    ports: list[int] = Field(default_factory=list)
+    protocols: list[str] = Field(default_factory=list)
     total_sent_packets: int = 0
     total_recv_packets: int = 0
     total_sent_bytes: int = 0
@@ -175,8 +175,10 @@ class CountryStatsEntry(BaseModel):
 class GeoIPStatus(BaseModel):
     available: bool
     file_path: str
+    file_name: str
     file_size: int | None = None
     last_modified: str | None = None
+    max_size_bytes: int
 
 
 class StatisticsResponse(BaseModel):
@@ -187,9 +189,9 @@ class StatisticsResponse(BaseModel):
     endpoints: list[EndpointStats]
     conversations: list[ConversationStats]
     io_buckets: list[IOBucket]
-    ip_stats: list[IPStatsEntry] = []
-    proto_stats: list[ProtoStatsEntry] = []
-    country_stats: list[CountryStatsEntry] = []
+    ip_stats: list[IPStatsEntry] = Field(default_factory=list)
+    proto_stats: list[ProtoStatsEntry] = Field(default_factory=list)
+    country_stats: list[CountryStatsEntry] = Field(default_factory=list)
     # Echo of the IO graph query parameters so clients can render the right
     # axis labels without re-sending the request.
     bucket_seconds: float = 1.0

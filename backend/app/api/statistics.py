@@ -226,9 +226,9 @@ async def get_statistics(
                 a["sent_bytes"] += rev_bytes
                 a["recv_bytes"] += fwd_bytes
             if c.proto.upper() == "TCP":
-                a["tcp"] += 1 if is_src else 0
+                a["tcp"] += 1
             elif c.proto.upper() == "UDP":
-                a["udp"] += 1 if is_src else 0
+                a["udp"] += 1
 
     ip_stats = sorted(
         [

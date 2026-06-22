@@ -224,10 +224,13 @@ class TestGetStatistics:
         assert test_conversation.src_ip in by_ip
         assert test_conversation.dst_ip in by_ip
         src = by_ip[test_conversation.src_ip]
+        dst = by_ip[test_conversation.dst_ip]
         assert src["country_code"] == "LAN"
         assert src["country"] == "Local Network"
         assert src["total_sent_packets"] == 3
         assert src["total_recv_packets"] == 2
+        assert src["tcp_session_count"] == 1
+        assert dst["tcp_session_count"] == 1
         assert 443 in src["ports"]
 
     async def test_statistics_has_proto_stats(
@@ -260,7 +263,8 @@ class TestGetStatistics:
         lan = next((c for c in data["country_stats"] if c["country_code"] == "LAN"), None)
         assert lan is not None
         assert lan["ip_count"] == 2
-        assert lan["total_packets"] > 0
+        assert lan["total_packets"] == 10
+        assert lan["session_count"] == 2
 
     async def test_single_packet_conversation_has_io(
         self, test_client_authenticated, test_capture, _session_engine

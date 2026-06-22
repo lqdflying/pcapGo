@@ -11,7 +11,6 @@ import {
   updateGeoIPDatabase,
   uploadGeoIPDatabase,
   type AllowedUser,
-  type GeoIPStatus,
 } from "../api/client";
 import { useAuthStore } from "../lib/store";
 import {
@@ -324,6 +323,16 @@ export function AdminPage() {
                 <span className="text-panel-warning">{t("admin.geoipUnavailable")}</span>
               )}
             </div>
+            {geoipQuery.data && (
+              <div className="mt-1 text-xs text-panel-muted">
+                <span className="mr-4">
+                  {t("admin.geoipFileName")}: {geoipQuery.data.file_name}
+                </span>
+                <span>
+                  {t("admin.geoipMaxSize")}: {(geoipQuery.data.max_size_bytes / 1024 / 1024).toFixed(0)} MB
+                </span>
+              </div>
+            )}
             {geoipQuery.data?.available && (
               <div className="mt-1 text-xs text-panel-muted">
                 {geoipQuery.data.file_size != null && (
@@ -341,6 +350,7 @@ export function AdminPage() {
           </div>
 
           {/* Download from URL */}
+          <p className="mb-2 text-xs text-panel-muted">{t("admin.geoipSafetyHint")}</p>
           <form
             onSubmit={(e) => {
               e.preventDefault();

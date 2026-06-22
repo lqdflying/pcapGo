@@ -4,7 +4,6 @@ import type { IPStatsEntry } from "../../api/client";
 import {
   SortHeader,
   FilterBox,
-  PercentBar,
   formatBytes,
   countryCodeToFlag,
   formatTimestamp,

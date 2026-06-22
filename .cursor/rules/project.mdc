@@ -11,6 +11,7 @@ A self-hosted web app for uploading and analyzing network packet captures (.pcap
 ## Repository Structure
 ```
 pcapGo/
+├── assets/                    # Bundled static assets, including GeoLite2-Country.mmdb for the first built-in GeoIP DB
 ├── version.json              # Version source of truth (version + buildDate, baked into Docker image)
 ├── Dockerfile                 # Root multi-stage build (frontend + backend, production)
 ├── docker-compose.yml         # SAMPLE: single-container prod compose (copy into a host deploy dir)
@@ -92,6 +93,7 @@ Production mode pulls the pre-built Harbor image, which bundles the React SPA in
 - `DATABASE_URL` controls the DB connection.
 - Settings are loaded via Pydantic `BaseSettings` with `.env` file support and `extra="ignore"`.
 - `version.json` at the repo root is the single source of truth for the app version. It is read by Vite at frontend build time (`__APP_VERSION__`, `__BUILD_DATE__` compile-time constants) and by the backend at startup (`FastAPI(version=...)` and `/api/health` response). The Dockerfile stamps the `buildDate` field via `--build-arg BUILD_DATE`.
+- GeoIP country lookup uses the MaxMind GeoLite2 Country binary database. The source asset is `assets/GeoLite2-Country.mmdb` and the production Dockerfile copies it to `/app/data/GeoLite2-Country.mmdb` as the built-in first database version. Runtime admin uploads/downloads replace `GEOIP_DB_PATH` (default `data/GeoLite2-Country.mmdb`); mount/persist `data/` if admins manage updates in-app. `GEOIP_MAX_DB_MB` caps upload/download size. Admin URL downloads only allow public HTTP(S) targets and validate `.mmdb` content before activation.
 
 ## How to Run
 ```bash
@@ -134,11 +136,11 @@ cd frontend && npm run typecheck:test
 Test DB: `postgresql+asyncpg://pcap:pcap@localhost:5432/pcap_test`
 
 ### Test Coverage Summary
-- **Backend**: 348 tests (unit + integration + migrations) — requires PostgreSQL
-- **Frontend**: 18 test files (278 tests) — self-contained, no server needed
+- **Backend**: 363 tests (unit + integration + migrations) — requires PostgreSQL
+- **Frontend**: 19 test files (282 tests) — self-contained, no server needed
 - **Test frameworks**: pytest + pytest-asyncio (backend), vitest + @testing-library/react (frontend)
 
 ## Environment Variables
 Required: `DATABASE_URL`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_OAUTH_REDIRECT_URL`, `JWT_SECRET`, `PUBLIC_BASE_URL`, `ADMIN_GITHUB_USER`
-Optional: `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`, `MAX_UPLOAD_MB`, `COOKIE_SECURE`, `SESSION_SECRET`, `DEV_MODE`, `JWT_EXPIRE_MINUTES`
+Optional: `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`, `MAX_UPLOAD_MB`, `COOKIE_SECURE`, `SESSION_SECRET`, `DEV_MODE`, `JWT_EXPIRE_MINUTES`, `GEOIP_DB_PATH`, `GEOIP_MAX_DB_MB`
 Compose-only: `SERVE_FRONTEND`, `WEB_PORT`, `NGINX_PORT`, `POSTGRES_PASSWORD`

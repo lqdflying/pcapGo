@@ -62,6 +62,7 @@ class Settings(BaseSettings):
 
     # GeoIP
     geoip_db_path: Path = Path("data/GeoLite2-Country.mmdb")
+    geoip_max_db_mb: int = 100
 
     @property
     def max_upload_bytes(self) -> int:
