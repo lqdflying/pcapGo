@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Wifi } from "lucide-react";
 import type { CountryStatsEntry } from "../../api/client";
+import { FlagIcon } from "./FlagIcon";
 import {
   SortHeader,
   FilterBox,
@@ -96,7 +97,6 @@ export function CountryStatsView({
           </thead>
           <tbody>
             {rows.map((e) => {
-              const flag = e.country_flag;
               const isLan = e.country_code === "LAN";
               return (
                 <tr
@@ -106,9 +106,9 @@ export function CountryStatsView({
                   <td className="py-1.5 pr-2 text-panel-text">
                     {isLan ? (
                       <Wifi className="mr-1.5 inline h-3.5 w-3.5 text-panel-muted" />
-                    ) : flag ? (
-                      <span className="mr-1.5">{flag}</span>
-                    ) : null}
+                    ) : (
+                      <FlagIcon countryCode={e.country_code} fallback={e.country_flag} />
+                    )}
                     {e.country}
                   </td>
                   <td className="py-1.5 text-right text-panel-muted">{e.ip_count}</td>

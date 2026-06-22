@@ -268,6 +268,27 @@ class TestGetStatistics:
         assert lan["total_packets"] == 10
         assert lan["session_count"] == 2
 
+    async def test_statistics_public_country_rows_include_flags(
+        self, test_client_authenticated, test_capture, test_conversation, monkeypatch
+    ):
+        import app.api.statistics as statistics_api
+
+        def fake_lookup_country(ip: str):
+            return ("JP", "Japan") if ip == test_conversation.src_ip else ("US", "United States")
+
+        monkeypatch.setattr(statistics_api, "lookup_country", fake_lookup_country)
+
+        response = await test_client_authenticated.get(
+            f"/api/captures/{test_capture.id}/statistics"
+        )
+        data = response.json()
+        by_ip = {e["ip"]: e for e in data["ip_stats"]}
+        assert by_ip[test_conversation.src_ip]["country_flag"] == "\U0001F1EF\U0001F1F5"
+        assert by_ip[test_conversation.dst_ip]["country_flag"] == "\U0001F1FA\U0001F1F8"
+        by_country = {e["country_code"]: e for e in data["country_stats"]}
+        assert by_country["JP"]["country_flag"] == "\U0001F1EF\U0001F1F5"
+        assert by_country["US"]["country_flag"] == "\U0001F1FA\U0001F1F8"
+
     async def test_single_packet_conversation_has_io(
         self, test_client_authenticated, test_capture, _session_engine
     ):

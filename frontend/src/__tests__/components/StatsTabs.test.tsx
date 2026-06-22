@@ -41,6 +41,18 @@ describe("StatsTabs", () => {
     expect(screen.getAllByText("Local Network").length).toBeGreaterThan(0);
   });
 
+  it("renders country flags as SVG images", () => {
+    const stats = createMockStatisticsResponse({
+      country_stats: [
+        { country: "Singapore", country_code: "SG", country_flag: "\uD83C\uDDF8\uD83C\uDDEC", ip_count: 1, total_packets: 10, total_bytes: 1000, session_count: 1 },
+      ],
+    });
+    render(<StatsTabs stats={stats} loading={false} />);
+    fireEvent.click(screen.getByText("Country Statistics"));
+    const flag = document.querySelector('img[src$="/1f1f8-1f1ec.svg"]');
+    expect(flag).toBeInTheDocument();
+  });
+
   it("switches to IO Graph view", () => {
     const stats = createMockStatisticsResponse();
     render(<StatsTabs stats={stats} loading={false} />);

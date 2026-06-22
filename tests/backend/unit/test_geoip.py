@@ -24,12 +24,17 @@ def test_country_code_to_flag():
     assert geoip.country_code_to_flag("US") == "\U0001F1FA\U0001F1F8"
     assert geoip.country_code_to_flag("JP") == "\U0001F1EF\U0001F1F5"
     assert geoip.country_code_to_flag("CN") == "\U0001F1E8\U0001F1F3"
+    assert geoip.country_code_to_flag("us") == "\U0001F1FA\U0001F1F8"
+    assert geoip.country_code_to_flag(" jp ") == "\U0001F1EF\U0001F1F5"
     assert geoip.country_code_to_flag("LAN") == ""
+    assert geoip.country_code_to_flag("lan") == ""
     assert geoip.country_code_to_flag("XX") == ""
+    assert geoip.country_code_to_flag("xx") == ""
     assert geoip.country_code_to_flag(None) == ""
     assert geoip.country_code_to_flag("") == ""
     assert geoip.country_code_to_flag("A") == ""
     assert geoip.country_code_to_flag("USA") == ""
+    assert geoip.country_code_to_flag("U1") == ""
 
 
 @pytest.mark.unit

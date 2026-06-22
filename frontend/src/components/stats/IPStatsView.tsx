@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Wifi } from "lucide-react";
 import type { IPStatsEntry } from "../../api/client";
+import { FlagIcon } from "./FlagIcon";
 import {
   SortHeader,
   FilterBox,
@@ -122,9 +123,9 @@ export function IPStatsView({
                 <td className="py-1.5 pr-2 text-panel-muted">
                   {ep.country_code === "LAN" ? (
                     <Wifi className="mr-1.5 inline h-3.5 w-3.5 text-panel-muted" />
-                  ) : ep.country_flag ? (
-                    <span className="mr-1">{ep.country_flag}</span>
-                  ) : null}
+                  ) : (
+                    <FlagIcon countryCode={ep.country_code} fallback={ep.country_flag} />
+                  )}
                   {ep.country ?? "-"}
                 </td>
                 <td className="py-1.5 pr-2 text-panel-muted">{formatTimestamp(ep.earliest_time)}</td>

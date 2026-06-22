@@ -220,11 +220,12 @@ def lookup_country(ip: str) -> tuple[str, str] | None:
 
 
 def country_code_to_flag(code: str | None) -> str:
-    if not code or code in ("LAN", "XX") or len(code) != 2:
+    normalized = code.strip().upper() if code else ""
+    if normalized in {"", "LAN", "XX"} or len(normalized) != 2 or not normalized.isalpha():
         return ""
     base = 0x1F1E6
-    c1 = ord(code[0].upper()) - ord("A")
-    c2 = ord(code[1].upper()) - ord("A")
+    c1 = ord(normalized[0]) - ord("A")
+    c2 = ord(normalized[1]) - ord("A")
     if not (0 <= c1 <= 25 and 0 <= c2 <= 25):
         return ""
     return chr(base + c1) + chr(base + c2)

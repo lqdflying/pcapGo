@@ -84,14 +84,6 @@ export function formatBytes(b: number) {
   return `${(b / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function countryCodeToFlag(code: string): string {
-  if (!code || code === "LAN" || code === "XX" || code.length !== 2) return "";
-  const base = 0x1f1e6;
-  const c1 = code.charCodeAt(0) - 65;
-  const c2 = code.charCodeAt(1) - 65;
-  if (c1 < 0 || c1 > 25 || c2 < 0 || c2 > 25) return "";
-  return String.fromCodePoint(base + c1, base + c2);
-}
 
 export function formatTimestamp(ts: number): string {
   if (!ts) return "-";
