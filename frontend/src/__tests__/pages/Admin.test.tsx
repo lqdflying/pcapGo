@@ -11,11 +11,18 @@ const mockAddAllowedUser = vi.fn();
 const mockRemoveAllowedUser = vi.fn();
 const mockUpdateAllowedUserRole = vi.fn();
 
+const mockGetGeoIPStatus = vi.fn();
+const mockUpdateGeoIPDatabase = vi.fn();
+const mockUploadGeoIPDatabase = vi.fn();
+
 vi.mock("@/api/client", () => ({
   listAllowedUsers: (...args: any[]) => mockListAllowedUsers(...args),
   addAllowedUser: (...args: any[]) => mockAddAllowedUser(...args),
   removeAllowedUser: (...args: any[]) => mockRemoveAllowedUser(...args),
   updateAllowedUserRole: (...args: any[]) => mockUpdateAllowedUserRole(...args),
+  getGeoIPStatus: (...args: any[]) => mockGetGeoIPStatus(...args),
+  updateGeoIPDatabase: (...args: any[]) => mockUpdateGeoIPDatabase(...args),
+  uploadGeoIPDatabase: (...args: any[]) => mockUploadGeoIPDatabase(...args),
 }));
 
 function renderAdmin() {
@@ -40,6 +47,12 @@ describe("AdminPage", () => {
     useAuthStore.setState({
       user: createMockUser({ login: "admin", role: "super_admin" }),
       loading: false,
+    });
+    mockGetGeoIPStatus.mockResolvedValue({
+      available: false,
+      file_path: "data/GeoLite2-Country.mmdb",
+      file_size: null,
+      last_modified: null,
     });
     mockListAllowedUsers.mockResolvedValue({
       users: [

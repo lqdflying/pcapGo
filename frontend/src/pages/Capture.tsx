@@ -179,6 +179,11 @@ export function CapturePage() {
     setViewMode("packets");
   };
 
+  const handleSelectProtocol = (proto: string) => {
+    setFilterProto(proto.toLowerCase());
+    setViewMode("packets");
+  };
+
   const handleBucketChange = (bs: number, metric: "packets" | "bytes") => {
     setBucketSeconds(bs);
     setIoMetric(metric);
@@ -539,6 +544,7 @@ export function CapturePage() {
                 onSelectEndpoint={handleSelectEndpoint}
                 onSelectConversation={handleSelectConversation}
                 onFollowConversation={setFollowConv}
+                onSelectProtocol={handleSelectProtocol}
                 onBucketChange={handleBucketChange}
               />
             </div>

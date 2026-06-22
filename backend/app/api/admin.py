@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import logging
+import shutil
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from pydantic import BaseModel
 from sqlalchemy import select, func
 
 from app.config import settings
@@ -10,6 +13,8 @@ from app.db.session import async_session
 from app.models import User, AllowedUser
 from app.core.security import require_admin
 from app.schemas.user import AllowedUserCreate, AllowedUserRead, AllowedUserList
+from app.schemas.capture import GeoIPStatus
+from app.services import geoip
 
 logger = logging.getLogger(__name__)
 
@@ -161,3 +166,52 @@ async def update_allowed_user_role(
         created_at=au.created_at,
         has_logged_in=logged_in,
     )
+
+
+# ── GeoIP management ─────────────────────────────────────────────────────────
+
+@router.get("/geoip", response_model=GeoIPStatus)
+async def get_geoip_status(admin: User = Depends(require_admin)):
+    return GeoIPStatus(**geoip.get_status())
+
+
+class GeoIPUpdateRequest(BaseModel):
+    url: str
+
+
+@router.post("/geoip/update", response_model=GeoIPStatus)
+async def update_geoip_database(
+    body: GeoIPUpdateRequest,
+    admin: User = Depends(require_admin),
+):
+    url = body.url.strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
+    try:
+        geoip.download_database(url)
+    except Exception as exc:
+        logger.error("GeoIP download failed: %s", exc)
+        raise HTTPException(status_code=400, detail=f"Download failed: {exc}")
+    return GeoIPStatus(**geoip.get_status())
+
+
+@router.post("/geoip/upload", response_model=GeoIPStatus)
+async def upload_geoip_database(
+    file: UploadFile = File(...),
+    admin: User = Depends(require_admin),
+):
+    if not file.filename or not file.filename.endswith(".mmdb"):
+        raise HTTPException(status_code=400, detail="File must be a .mmdb file")
+    dest = settings.geoip_db_path
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_suffix(".mmdb.tmp")
+    try:
+        with open(tmp, "wb") as f:
+            while chunk := await file.read(8192):
+                f.write(chunk)
+        shutil.move(str(tmp), str(dest))
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+    geoip.reload_database()
+    return GeoIPStatus(**geoip.get_status())

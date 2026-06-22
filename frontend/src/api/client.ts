@@ -132,6 +132,50 @@ export interface IOBucket {
   byte_count: number;
 }
 
+export interface IPStatsEntry {
+  ip: string;
+  country: string | null;
+  country_code: string | null;
+  earliest_time: number;
+  latest_time: number;
+  ports: number[];
+  protocols: string[];
+  total_sent_packets: number;
+  total_recv_packets: number;
+  total_sent_bytes: number;
+  total_recv_bytes: number;
+  tcp_session_count: number;
+  udp_session_count: number;
+}
+
+export interface ProtoStatsEntry {
+  proto: string;
+  total_packets: number;
+  total_bytes: number;
+  session_count: number;
+  avg_packet_size: number;
+  percentage_packets: number;
+  percentage_bytes: number;
+  first_seen: number;
+  last_seen: number;
+}
+
+export interface CountryStatsEntry {
+  country: string;
+  country_code: string;
+  ip_count: number;
+  total_packets: number;
+  total_bytes: number;
+  session_count: number;
+}
+
+export interface GeoIPStatus {
+  available: boolean;
+  file_path: string;
+  file_size: number | null;
+  last_modified: string | null;
+}
+
 export interface StatisticsResponse {
   capture_id: string;
   packet_count: number;
@@ -140,6 +184,9 @@ export interface StatisticsResponse {
   endpoints: EndpointStats[];
   conversations: ConversationStats[];
   io_buckets: IOBucket[];
+  ip_stats: IPStatsEntry[];
+  proto_stats: ProtoStatsEntry[];
+  country_stats: CountryStatsEntry[];
   bucket_seconds: number;
   metric: "packets" | "bytes";
 }
@@ -512,5 +559,24 @@ export async function removeAllowedUser(github_login: string): Promise<void> {
 
 export async function updateAllowedUserRole(github_login: string, role: string): Promise<AllowedUser> {
   const { data } = await api.patch(`/api/admin/users/${encodeURIComponent(github_login)}`, { github_login, role });
+  return data;
+}
+
+// ── GeoIP admin API ──────────────────────────────────────────────────────────
+
+export async function getGeoIPStatus(): Promise<GeoIPStatus> {
+  const { data } = await api.get("/api/admin/geoip");
+  return data;
+}
+
+export async function updateGeoIPDatabase(url: string): Promise<GeoIPStatus> {
+  const { data } = await api.post("/api/admin/geoip/update", { url });
+  return data;
+}
+
+export async function uploadGeoIPDatabase(file: File): Promise<GeoIPStatus> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await api.post("/api/admin/geoip/upload", form);
   return data;
 }

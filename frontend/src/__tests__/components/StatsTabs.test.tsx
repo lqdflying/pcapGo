@@ -6,7 +6,7 @@ import { createMockStatisticsResponse } from "../test-setup";
 describe("StatsTabs", () => {
   it("renders loading state", () => {
     render(<StatsTabs stats={null} loading={true} />);
-    expect(screen.getByText("Protocol Hierarchy")).toBeInTheDocument();
+    expect(screen.getByText("Statistics")).toBeInTheDocument();
   });
 
   it("renders placeholder when no stats available", () => {
@@ -14,10 +14,11 @@ describe("StatsTabs", () => {
     expect(screen.getByText("No statistics available")).toBeInTheDocument();
   });
 
-  it("renders protocol hierarchy tab by default", () => {
+  it("shows IP Statistics view by default", () => {
     const stats = createMockStatisticsResponse();
     render(<StatsTabs stats={stats} loading={false} />);
-    expect(screen.getByText("TCP")).toBeInTheDocument();
+    expect(screen.getByText("10.0.0.1")).toBeInTheDocument();
+    expect(screen.getByText("10.0.0.2")).toBeInTheDocument();
   });
 
   it("shows packet count in summary", () => {
@@ -26,44 +27,24 @@ describe("StatsTabs", () => {
     expect(screen.getByText(/42 packets/)).toBeInTheDocument();
   });
 
-  it("switches to endpoints tab", () => {
+  it("switches to Protocol Statistics view", () => {
     const stats = createMockStatisticsResponse();
     render(<StatsTabs stats={stats} loading={false} />);
-    fireEvent.click(screen.getByText("Endpoints"));
-    expect(screen.getByText("10.0.0.1")).toBeInTheDocument();
-  });
-
-  it("renders Tx/Rx columns in endpoints tab", () => {
-    const stats = createMockStatisticsResponse();
-    render(<StatsTabs stats={stats} loading={false} />);
-    fireEvent.click(screen.getByText("Endpoints"));
-    expect(screen.getByText("Tx")).toBeInTheDocument();
-    expect(screen.getByText("Rx")).toBeInTheDocument();
-  });
-
-  it("switches to conversations tab", () => {
-    const stats = createMockStatisticsResponse();
-    render(<StatsTabs stats={stats} loading={false} />);
-    fireEvent.click(screen.getByText("Conversations"));
-    // Should show source IP:port pattern
-    expect(screen.getByText(/10\.0\.0\.1/)).toBeInTheDocument();
-  });
-
-  it("renders app_protocol and flags columns in conversations tab", () => {
-    const stats = createMockStatisticsResponse();
-    render(<StatsTabs stats={stats} loading={false} />);
-    fireEvent.click(screen.getByText("Conversations"));
-    expect(screen.getByText("App")).toBeInTheDocument();
-    expect(screen.getByText("Flags")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Protocol Statistics"));
     expect(screen.getByText("TLS")).toBeInTheDocument();
-    expect(screen.getByText("SYN,ACK")).toBeInTheDocument();
   });
 
-  it("switches to IO Graph tab", () => {
+  it("switches to Country Statistics view", () => {
+    const stats = createMockStatisticsResponse();
+    render(<StatsTabs stats={stats} loading={false} />);
+    fireEvent.click(screen.getByText("Country Statistics"));
+    expect(screen.getAllByText("Local Network").length).toBeGreaterThan(0);
+  });
+
+  it("switches to IO Graph view", () => {
     const stats = createMockStatisticsResponse();
     render(<StatsTabs stats={stats} loading={false} />);
     fireEvent.click(screen.getByText("IO Graph"));
-    // IO Graph renders a message with "IO Graph" text
     const allText = screen.getAllByText(/IO Graph/);
     expect(allText.length).toBeGreaterThan(0);
   });
@@ -80,80 +61,40 @@ describe("StatsTabs", () => {
     expect(onBucketChange).toHaveBeenCalledWith(1, "bytes");
   });
 
-  it("shows packet percentage and a total row in the protocol tab", () => {
+  it("filters IPs by address in IP Statistics view", () => {
     const stats = createMockStatisticsResponse({
-      packet_count: 10,
-      protocols: [{ name: "TCP", packet_count: 10, byte_count: 1000, children: [] }],
-    });
-    render(<StatsTabs stats={stats} loading={false} />);
-    expect(screen.getByText("100.0%")).toBeInTheDocument();
-    expect(screen.getByText("Total")).toBeInTheDocument();
-  });
-
-  it("filters endpoints by address", () => {
-    const stats = createMockStatisticsResponse({
-      endpoints: [
-        { address: "10.0.0.1", packet_count: 5, byte_count: 500, tx_packets: 5, rx_packets: 0, tx_bytes: 500, rx_bytes: 0 },
-        { address: "192.168.1.5", packet_count: 20, byte_count: 2000, tx_packets: 0, rx_packets: 20, tx_bytes: 0, rx_bytes: 2000 },
+      ip_stats: [
+        { ip: "10.0.0.1", country: "Local Network", country_code: "LAN", earliest_time: 0, latest_time: 2.5, ports: [443], protocols: ["TLS"], total_sent_packets: 10, total_recv_packets: 0, total_sent_bytes: 1000, total_recv_bytes: 0, tcp_session_count: 1, udp_session_count: 0 },
+        { ip: "192.168.1.5", country: "Local Network", country_code: "LAN", earliest_time: 0, latest_time: 2.5, ports: [80], protocols: ["HTTP"], total_sent_packets: 20, total_recv_packets: 5, total_sent_bytes: 2000, total_recv_bytes: 500, tcp_session_count: 1, udp_session_count: 0 },
       ],
     });
     render(<StatsTabs stats={stats} loading={false} />);
-    fireEvent.click(screen.getByText("Endpoints"));
     expect(screen.getByText("10.0.0.1")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Filter endpoints"), {
+    fireEvent.change(screen.getByLabelText("Filter IPs"), {
       target: { value: "192" },
     });
     expect(screen.queryByText("10.0.0.1")).not.toBeInTheDocument();
     expect(screen.getByText("192.168.1.5")).toBeInTheDocument();
   });
 
-  it("sorts endpoints when a column header is clicked", () => {
-    const stats = createMockStatisticsResponse({
-      endpoints: [
-        { address: "10.0.0.1", packet_count: 5, byte_count: 500, tx_packets: 5, rx_packets: 0, tx_bytes: 500, rx_bytes: 0 },
-        { address: "10.0.0.9", packet_count: 20, byte_count: 2000, tx_packets: 20, rx_packets: 0, tx_bytes: 2000, rx_bytes: 0 },
-      ],
-    });
-    render(<StatsTabs stats={stats} loading={false} />);
-    fireEvent.click(screen.getByText("Endpoints"));
-    // Default sort is packets desc → the 20-packet endpoint comes first.
-    let addrs = screen.getAllByText(/10\.0\.0\./);
-    expect(addrs[0].textContent).toBe("10.0.0.9");
-    // Toggle to ascending.
-    fireEvent.click(screen.getByText("Packets"));
-    addrs = screen.getAllByText(/10\.0\.0\./);
-    expect(addrs[0].textContent).toBe("10.0.0.1");
-  });
-
-  it("calls onSelectEndpoint when an endpoint row is clicked", () => {
+  it("calls onSelectEndpoint when an IP row is clicked", () => {
     const stats = createMockStatisticsResponse();
     const onSelectEndpoint = vi.fn();
     render(<StatsTabs stats={stats} loading={false} onSelectEndpoint={onSelectEndpoint} />);
-    fireEvent.click(screen.getByText("Endpoints"));
     fireEvent.click(screen.getByText("10.0.0.1"));
     expect(onSelectEndpoint).toHaveBeenCalledWith("10.0.0.1");
   });
 
-  it("calls onSelectConversation when a conversation row is clicked", () => {
+  it("calls onSelectProtocol when a protocol row is clicked", () => {
     const stats = createMockStatisticsResponse();
-    const onSelectConversation = vi.fn();
-    render(
-      <StatsTabs stats={stats} loading={false} onSelectConversation={onSelectConversation} />
-    );
-    fireEvent.click(screen.getByText("Conversations"));
-    fireEvent.click(screen.getByText("10.0.0.1:443"));
-    expect(onSelectConversation).toHaveBeenCalledTimes(1);
-    expect(onSelectConversation.mock.calls[0][0]).toMatchObject({ src_ip: "10.0.0.1" });
+    const onSelectProtocol = vi.fn();
+    render(<StatsTabs stats={stats} loading={false} onSelectProtocol={onSelectProtocol} />);
+    fireEvent.click(screen.getByText("Protocol Statistics"));
+    fireEvent.click(screen.getByText("TLS"));
+    expect(onSelectProtocol).toHaveBeenCalledWith("TLS");
   });
 
-  it("shows an average packet size column in conversations", () => {
-    const stats = createMockStatisticsResponse();
-    render(<StatsTabs stats={stats} loading={false} />);
-    fireEvent.click(screen.getByText("Conversations"));
-    expect(screen.getByText("Avg")).toBeInTheDocument();
-  });
-
-  it("renders the IO graph as an SVG with peak/avg annotations", () => {
+  it("renders IO graph as SVG with peak/avg annotations", () => {
     const stats = createMockStatisticsResponse();
     render(<StatsTabs stats={stats} loading={false} />);
     fireEvent.click(screen.getByText("IO Graph"));
@@ -161,21 +102,26 @@ describe("StatsTabs", () => {
     expect(screen.getByText(/peak/)).toBeInTheDocument();
   });
 
-  it("displays protocol children when expanded", () => {
-    const stats = createMockStatisticsResponse({
-      protocols: [
-        {
-          name: "TCP",
-          packet_count: 10,
-          byte_count: 1000,
-          children: [
-            { name: "HTTP", packet_count: 5, byte_count: 500, children: [] },
-          ],
-        },
-      ],
-    });
+  it("shows sidebar navigation items", () => {
+    const stats = createMockStatisticsResponse();
     render(<StatsTabs stats={stats} loading={false} />);
-    fireEvent.click(screen.getByText("TCP"));
-    expect(screen.getByText("HTTP")).toBeInTheDocument();
+    expect(screen.getByText("IP Statistics")).toBeInTheDocument();
+    expect(screen.getByText("Protocol Statistics")).toBeInTheDocument();
+    expect(screen.getByText("Country Statistics")).toBeInTheDocument();
+    expect(screen.getByText("IO Graph")).toBeInTheDocument();
+  });
+
+  it("shows no countries message when country_stats is empty", () => {
+    const stats = createMockStatisticsResponse({ country_stats: [] });
+    render(<StatsTabs stats={stats} loading={false} />);
+    fireEvent.click(screen.getByText("Country Statistics"));
+    expect(screen.getByText("No country data available")).toBeInTheDocument();
+  });
+
+  it("shows protocol percentage bar", () => {
+    const stats = createMockStatisticsResponse();
+    render(<StatsTabs stats={stats} loading={false} />);
+    fireEvent.click(screen.getByText("Protocol Statistics"));
+    expect(screen.getAllByText("100.0%").length).toBeGreaterThan(0);
   });
 });
