@@ -16,7 +16,11 @@ from app.schemas.capture import (
     EndpointStats,
     ProtocolHierarchy,
     IOBucket,
+    IPStatsEntry,
+    ProtoStatsEntry,
+    CountryStatsEntry,
 )
+from app.services.geoip import lookup_country
 
 logger = logging.getLogger(__name__)
 
@@ -181,6 +185,145 @@ async def get_statistics(
                 IOBucket(ts_start=bs, packet_count=pkt, byte_count=byt)
             )
 
+    # ── IP stats ───────────────────────────────────────────────────
+    ip_agg: dict[str, dict] = {}
+    for c in conversations:
+        fwd_pkts = c.fwd_packet_count
+        rev_pkts = c.packet_count - fwd_pkts
+        fwd_bytes = c.fwd_byte_count
+        rev_bytes = c.byte_count - fwd_bytes
+        proto_label = c.app_protocol or c.proto
+
+        for ip, is_src in [(c.src_ip, True), (c.dst_ip, False)]:
+            if ip not in ip_agg:
+                geo = lookup_country(ip)
+                ip_agg[ip] = {
+                    "ip": ip,
+                    "country": geo[1] if geo else None,
+                    "country_code": geo[0] if geo else None,
+                    "earliest_time": c.start_ts,
+                    "latest_time": c.end_ts,
+                    "ports": set(),
+                    "protocols": set(),
+                    "sent_pkts": 0, "recv_pkts": 0,
+                    "sent_bytes": 0, "recv_bytes": 0,
+                    "tcp": 0, "udp": 0,
+                }
+            a = ip_agg[ip]
+            a["earliest_time"] = min(a["earliest_time"], c.start_ts)
+            a["latest_time"] = max(a["latest_time"], c.end_ts)
+            a["protocols"].add(proto_label)
+            if is_src:
+                a["ports"].add(c.src_port)
+                a["sent_pkts"] += fwd_pkts
+                a["recv_pkts"] += rev_pkts
+                a["sent_bytes"] += fwd_bytes
+                a["recv_bytes"] += rev_bytes
+            else:
+                a["ports"].add(c.dst_port)
+                a["sent_pkts"] += rev_pkts
+                a["recv_pkts"] += fwd_pkts
+                a["sent_bytes"] += rev_bytes
+                a["recv_bytes"] += fwd_bytes
+            if c.proto.upper() == "TCP":
+                a["tcp"] += 1 if is_src else 0
+            elif c.proto.upper() == "UDP":
+                a["udp"] += 1 if is_src else 0
+
+    ip_stats = sorted(
+        [
+            IPStatsEntry(
+                ip=a["ip"],
+                country=a["country"],
+                country_code=a["country_code"],
+                earliest_time=a["earliest_time"],
+                latest_time=a["latest_time"],
+                ports=sorted(a["ports"])[:20],
+                protocols=sorted(a["protocols"]),
+                total_sent_packets=a["sent_pkts"],
+                total_recv_packets=a["recv_pkts"],
+                total_sent_bytes=a["sent_bytes"],
+                total_recv_bytes=a["recv_bytes"],
+                tcp_session_count=a["tcp"],
+                udp_session_count=a["udp"],
+            )
+            for a in ip_agg.values()
+        ],
+        key=lambda e: e.total_sent_packets + e.total_recv_packets,
+        reverse=True,
+    )
+
+    # ── Protocol stats ────────────────────────────────────────────
+    total_pkts = capture.packet_count or 1
+    total_bytes_all = sum(c.byte_count for c in conversations) or 1
+    proto_agg: dict[str, dict] = {}
+    for c in conversations:
+        label = c.app_protocol or c.proto
+        if label not in proto_agg:
+            proto_agg[label] = {
+                "pkts": 0, "bytes": 0, "sessions": 0,
+                "first": c.start_ts, "last": c.end_ts,
+            }
+        p = proto_agg[label]
+        p["pkts"] += c.packet_count
+        p["bytes"] += c.byte_count
+        p["sessions"] += 1
+        p["first"] = min(p["first"], c.start_ts)
+        p["last"] = max(p["last"], c.end_ts)
+
+    proto_stats = sorted(
+        [
+            ProtoStatsEntry(
+                proto=name,
+                total_packets=p["pkts"],
+                total_bytes=p["bytes"],
+                session_count=p["sessions"],
+                avg_packet_size=p["bytes"] / p["pkts"] if p["pkts"] else 0,
+                percentage_packets=round(p["pkts"] / total_pkts * 100, 2),
+                percentage_bytes=round(p["bytes"] / total_bytes_all * 100, 2),
+                first_seen=p["first"],
+                last_seen=p["last"],
+            )
+            for name, p in proto_agg.items()
+        ],
+        key=lambda e: e.total_packets,
+        reverse=True,
+    )
+
+    # ── Country stats ─────────────────────────────────────────────
+    country_agg: dict[str, dict] = {}
+    for a in ip_agg.values():
+        cc = a["country_code"]
+        cn = a["country"]
+        if not cc:
+            continue
+        if cc not in country_agg:
+            country_agg[cc] = {
+                "country": cn, "code": cc,
+                "ips": 0, "pkts": 0, "bytes": 0, "sessions": 0,
+            }
+        ca = country_agg[cc]
+        ca["ips"] += 1
+        ca["pkts"] += a["sent_pkts"] + a["recv_pkts"]
+        ca["bytes"] += a["sent_bytes"] + a["recv_bytes"]
+        ca["sessions"] += a["tcp"] + a["udp"]
+
+    country_stats = sorted(
+        [
+            CountryStatsEntry(
+                country=ca["country"],
+                country_code=ca["code"],
+                ip_count=ca["ips"],
+                total_packets=ca["pkts"],
+                total_bytes=ca["bytes"],
+                session_count=ca["sessions"],
+            )
+            for ca in country_agg.values()
+        ],
+        key=lambda e: e.total_packets,
+        reverse=True,
+    )
+
     conv_stats = [
         ConversationStats(
             id=c.id,
@@ -207,6 +350,9 @@ async def get_statistics(
         endpoints=sorted(ep_map.values(), key=lambda e: e.packet_count, reverse=True),
         conversations=conv_stats,
         io_buckets=io_buckets,
+        ip_stats=ip_stats,
+        proto_stats=proto_stats,
+        country_stats=country_stats,
         bucket_seconds=effective_bucket if conversations else bucket_seconds,
         metric=metric_norm,
     )

@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     # User management
     admin_github_user: str = ""
 
+    # GeoIP
+    geoip_db_path: Path = Path("data/GeoLite2-Country.mmdb")
+
     @property
     def max_upload_bytes(self) -> int:
         return self.max_upload_mb * 1024 * 1024

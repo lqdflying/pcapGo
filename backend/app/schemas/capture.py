@@ -135,6 +135,50 @@ class FollowStreamResponse(BaseModel):
     truncated: bool
 
 
+class IPStatsEntry(BaseModel):
+    ip: str
+    country: str | None = None
+    country_code: str | None = None
+    earliest_time: float = 0.0
+    latest_time: float = 0.0
+    ports: list[int] = []
+    protocols: list[str] = []
+    total_sent_packets: int = 0
+    total_recv_packets: int = 0
+    total_sent_bytes: int = 0
+    total_recv_bytes: int = 0
+    tcp_session_count: int = 0
+    udp_session_count: int = 0
+
+
+class ProtoStatsEntry(BaseModel):
+    proto: str
+    total_packets: int = 0
+    total_bytes: int = 0
+    session_count: int = 0
+    avg_packet_size: float = 0.0
+    percentage_packets: float = 0.0
+    percentage_bytes: float = 0.0
+    first_seen: float = 0.0
+    last_seen: float = 0.0
+
+
+class CountryStatsEntry(BaseModel):
+    country: str
+    country_code: str
+    ip_count: int = 0
+    total_packets: int = 0
+    total_bytes: int = 0
+    session_count: int = 0
+
+
+class GeoIPStatus(BaseModel):
+    available: bool
+    file_path: str
+    file_size: int | None = None
+    last_modified: str | None = None
+
+
 class StatisticsResponse(BaseModel):
     capture_id: uuid.UUID
     packet_count: int
@@ -143,6 +187,9 @@ class StatisticsResponse(BaseModel):
     endpoints: list[EndpointStats]
     conversations: list[ConversationStats]
     io_buckets: list[IOBucket]
+    ip_stats: list[IPStatsEntry] = []
+    proto_stats: list[ProtoStatsEntry] = []
+    country_stats: list[CountryStatsEntry] = []
     # Echo of the IO graph query parameters so clients can render the right
     # axis labels without re-sending the request.
     bucket_seconds: float = 1.0
