@@ -22,6 +22,7 @@ tests/backend/
 │   ├── test_uploads.py / test_packets.py / test_statistics.py
 │   ├── test_analysis.py / test_chat.py / test_follow.py / test_export.py
 │   ├── test_capture_command.py   # POST /api/capture-command/generate (LLM-gated SSE)
+│   ├── test_session_packets.py   # GET /api/captures/{id}/session-packets tuple filtering + GeoIP
 │   └── test_admin.py             # allowlist/admin API, role sync, GeoIP management, revocation, admin capture listing
 ├── models/         # Model CRUD tests (SQLAlchemy async sessions)
 ├── services/       # Service-level tests (currently empty)
@@ -32,6 +33,8 @@ tests/backend/
 │   ├── test_geoip.py             # GeoIP URL safety, size/validation, private classification, real asset check
 │   ├── test_docker_assets.py     # Dockerfile copies assets/GeoLite2-Country.mmdb into the runtime image
 │   ├── test_serialize_packets.py
+│   ├── test_session_packets.py   # session summary port extraction and tuple matching helpers
+│   ├── test_schemas_session.py   # GeoInfo and SessionPacketsResponse schemas
 │   └── test_schemas_field_node.py
 ├── conftest.py     # Shared fixtures (session-scoped engine, per-test DELETE)
 └── test_migrations.py
@@ -95,7 +98,7 @@ cd frontend && npm run typecheck
 cd frontend && npm run typecheck:test
 ```
 
-### Test Structure (18 test files under `frontend/src/__tests__/`)
+### Test Structure (22 test files under `frontend/src/__tests__/`)
 ```
 frontend/src/__tests__/
 ├── test-setup.ts                       # Global mocks + mock data factories
@@ -111,6 +114,10 @@ frontend/src/__tests__/
 │   ├── PacketTree.test.tsx            # Protocol layer tree expand/collapse + layer selection highlights hex
 │   ├── HexViewer.test.tsx             # Hex/ASCII dump formatting + highlighted byte ranges
 │   ├── StatsTabs.test.tsx             # Statistics tab navigation + Tx/Rx columns + IO graph controls
+│   ├── ConversationsView.test.tsx     # Conversations table sorting/filtering + Session/Follow actions
+│   ├── SessionView.test.tsx           # Session modal query construction, tab switching, GeoIP fallback
+│   ├── SessionSequenceDiagram.test.tsx # Virtualized sequence timeline + endpoint badges
+│   ├── SessionDataFlow.test.tsx       # Session packet table, pagination, detail panes, GeoIP fallback
 │   ├── FollowStream.test.tsx          # Follow-stream modal: ASCII/hex view + client/server coloring
 │   ├── CaptureCommandPanel.test.tsx   # Builder/AI tabs, shared command state, stale-command clear regression
 │   ├── CaptureCommandBuilder.test.tsx # tcpdump/pktmon form → command preview

@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { X, Loader2 } from "lucide-react";
+import { X, Loader2, Minus, Plus, RotateCcw } from "lucide-react";
 import type { ConversationStats } from "../api/client";
 import { getSessionPackets } from "../api/client";
 import { SessionSequenceDiagram } from "./SessionSequenceDiagram";
@@ -14,12 +14,50 @@ interface Props {
   onClose: () => void;
 }
 
+interface Geom {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 type Tab = "sequence" | "dataflow";
+
+const MIN_W = 560;
+const MIN_H = 360;
+const SIZE_STEP = 0.12;
+
+function defaultGeom(): Geom {
+  const vw = window.innerWidth || 1024;
+  const vh = window.innerHeight || 768;
+  const w = Math.max(MIN_W, Math.round(vw * 0.9));
+  const h = Math.max(MIN_H, Math.round(vh * 0.85));
+  return {
+    x: Math.max(0, Math.round((vw - w) / 2)),
+    y: Math.max(0, Math.round((vh - h) / 2)),
+    w,
+    h,
+  };
+}
+
+function clampGeom(geom: Geom): Geom {
+  const vw = window.innerWidth || geom.w;
+  const vh = window.innerHeight || geom.h;
+  const w = Math.max(MIN_W, Math.min(geom.w, vw));
+  const h = Math.max(MIN_H, Math.min(geom.h, vh));
+  return {
+    x: Math.max(0, Math.min(vw - Math.min(100, w), geom.x)),
+    y: Math.max(0, Math.min(vh - Math.min(40, h), geom.y)),
+    w,
+    h,
+  };
+}
 
 export function SessionView({ captureId, conversation, onClose }: Props) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>("sequence");
   const [offset, setOffset] = useState(0);
+  const [geom, setGeom] = useState(defaultGeom);
   const limit = tab === "sequence" ? 5000 : 200;
 
   const { data, isLoading, error } = useQuery({
@@ -43,6 +81,74 @@ export function SessionView({ captureId, conversation, onClose }: Props) {
       }),
   });
 
+  const onDragStart = useCallback(
+    (event: React.PointerEvent) => {
+      event.preventDefault();
+      const start = {
+        clientX: event.clientX,
+        clientY: event.clientY,
+        x: geom.x,
+        y: geom.y,
+      };
+      const target = event.currentTarget as HTMLElement;
+      target.setPointerCapture?.(event.pointerId);
+
+      const onMove = (moveEvent: PointerEvent) => {
+        const dx = moveEvent.clientX - start.clientX;
+        const dy = moveEvent.clientY - start.clientY;
+        setGeom((current) => clampGeom({ ...current, x: start.x + dx, y: start.y + dy }));
+      };
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    },
+    [geom.x, geom.y]
+  );
+
+  const onResizeStart = useCallback(
+    (event: React.PointerEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const start = {
+        clientX: event.clientX,
+        clientY: event.clientY,
+        w: geom.w,
+        h: geom.h,
+      };
+      const target = event.currentTarget as HTMLElement;
+      target.setPointerCapture?.(event.pointerId);
+
+      const onMove = (moveEvent: PointerEvent) => {
+        const dw = moveEvent.clientX - start.clientX;
+        const dh = moveEvent.clientY - start.clientY;
+        setGeom((current) => clampGeom({ ...current, w: start.w + dw, h: start.h + dh }));
+      };
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    },
+    [geom.w, geom.h]
+  );
+
+  const scaleWindow = useCallback((delta: number) => {
+    setGeom((current) => {
+      const nextW = current.w * (1 + delta);
+      const nextH = current.h * (1 + delta);
+      return clampGeom({
+        x: current.x - (nextW - current.w) / 2,
+        y: current.y - (nextH - current.h) / 2,
+        w: nextW,
+        h: nextH,
+      });
+    });
+  }, []);
+
   const tabs: { id: Tab; label: string }[] = [
     { id: "sequence", label: t("session.sequenceDiagram") },
     { id: "dataflow", label: t("session.dataFlow") },
@@ -50,24 +156,33 @@ export function SessionView({ captureId, conversation, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-50 bg-black/60"
       role="dialog"
       aria-label={t("session.title")}
       onClick={onClose}
     >
       <div
-        className="flex h-[85vh] w-[90vw] max-w-7xl flex-col overflow-hidden rounded-xl border border-panel-border bg-panel-bg"
-        onClick={(e) => e.stopPropagation()}
+        className="fixed flex flex-col overflow-hidden rounded-xl border border-panel-border bg-panel-bg shadow-2xl"
+        style={{ left: geom.x, top: geom.y, width: geom.w, height: geom.h }}
+        onClick={(event) => event.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center gap-3 border-b border-panel-border bg-panel-header px-4 py-2">
+        <div
+          className="flex cursor-grab items-center gap-3 border-b border-panel-border bg-panel-header px-4 py-2 active:cursor-grabbing"
+          onPointerDown={onDragStart}
+        >
           <span className="flex items-center gap-1 font-mono text-xs text-panel-text">
-            <FlagIcon countryCode={data?.src_geo.country_code} />
+            <FlagIcon
+              countryCode={data?.src_geo.country_code}
+              fallback={data?.src_geo.country_flag}
+            />
             {conversation.src_ip}:{conversation.src_port}
           </span>
           <span className="text-xs text-panel-muted">↔</span>
           <span className="flex items-center gap-1 font-mono text-xs text-panel-text">
-            <FlagIcon countryCode={data?.dst_geo.country_code} />
+            <FlagIcon
+              countryCode={data?.dst_geo.country_code}
+              fallback={data?.dst_geo.country_flag}
+            />
             {conversation.dst_ip}:{conversation.dst_port}
           </span>
           <span className="rounded bg-panel-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-panel-accent">
@@ -78,36 +193,66 @@ export function SessionView({ captureId, conversation, onClose }: Props) {
             ms
           </span>
 
-          {/* Tabs */}
-          <div className="ml-auto flex overflow-hidden rounded border border-panel-border">
-            {tabs.map((t_) => (
+          <div
+            className="ml-auto flex overflow-hidden rounded border border-panel-border"
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            {tabs.map((tabOption) => (
               <button
-                key={t_.id}
+                key={tabOption.id}
                 onClick={() => {
-                  setTab(t_.id);
+                  setTab(tabOption.id);
                   setOffset(0);
                 }}
                 className={`px-3 py-1 text-xs ${
-                  tab === t_.id
+                  tab === tabOption.id
                     ? "bg-panel-accent text-panel-header"
                     : "text-panel-muted hover:bg-panel-border"
                 }`}
               >
-                {t_.label}
+                {tabOption.label}
               </button>
             ))}
           </div>
 
-          <button
-            onClick={onClose}
-            aria-label={t("common.close")}
-            className="ml-2 rounded p-1 text-panel-muted hover:bg-panel-border hover:text-panel-text"
+          <div
+            className="flex items-center gap-1"
+            onPointerDown={(event) => event.stopPropagation()}
           >
-            <X className="h-4 w-4" />
-          </button>
+            <button
+              onClick={() => scaleWindow(-SIZE_STEP)}
+              aria-label={t("session.zoomOut")}
+              title={t("session.zoomOut")}
+              className="rounded p-1 text-panel-muted hover:bg-panel-border hover:text-panel-text"
+            >
+              <Minus className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => scaleWindow(SIZE_STEP)}
+              aria-label={t("session.zoomIn")}
+              title={t("session.zoomIn")}
+              className="rounded p-1 text-panel-muted hover:bg-panel-border hover:text-panel-text"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setGeom(defaultGeom())}
+              aria-label={t("session.resetWindow")}
+              title={t("session.resetWindow")}
+              className="rounded p-1 text-panel-muted hover:bg-panel-border hover:text-panel-text"
+            >
+              <RotateCcw className="h-4 w-4" />
+            </button>
+            <button
+              onClick={onClose}
+              aria-label={t("common.close")}
+              className="rounded p-1 text-panel-muted hover:bg-panel-border hover:text-panel-text"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
-        {/* Body */}
         <div className="flex-1 overflow-hidden">
           {isLoading ? (
             <div className="flex items-center justify-center py-16">
@@ -143,6 +288,19 @@ export function SessionView({ captureId, conversation, onClose }: Props) {
               onPageChange={setOffset}
             />
           )}
+        </div>
+
+        <div
+          className="absolute bottom-0 right-0 h-5 w-5 cursor-se-resize text-panel-muted/50 hover:text-panel-accent"
+          onPointerDown={onResizeStart}
+          aria-label={t("session.resizeWindow")}
+          role="separator"
+        >
+          <svg className="h-full w-full" viewBox="0 0 16 16" fill="currentColor">
+            <circle cx="12" cy="12" r="1.5" />
+            <circle cx="8" cy="12" r="1.5" />
+            <circle cx="12" cy="8" r="1.5" />
+          </svg>
         </div>
       </div>
     </div>

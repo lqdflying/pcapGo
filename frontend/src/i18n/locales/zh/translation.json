@@ -221,7 +221,11 @@
     "direction": "方向",
     "relativeTime": "时间",
     "index": "序号",
-    "info": "信息"
+    "info": "信息",
+    "zoomOut": "缩小会话窗口",
+    "zoomIn": "放大会话窗口",
+    "resetWindow": "重置会话窗口",
+    "resizeWindow": "调整会话窗口大小"
   },
   "captureCommand": {
     "platform": "平台",

@@ -41,6 +41,17 @@ def _cleanup_session_sidecars(index_path: str):
         Path(index_path.replace(".index.json", suffix)).unlink(missing_ok=True)
 
 
+def _append_malformed_summary_line(index_path: str):
+    base = index_path.replace(".index.json", "")
+    summary_path = Path(f"{base}.summary.jsonl")
+    offsets_path = Path(f"{base}.offsets.bin")
+    offset = summary_path.stat().st_size
+    with summary_path.open("ab") as f:
+        f.write(b"{malformed json\n")
+    with offsets_path.open("ab") as f:
+        f.write(_OFFSET_FMT.pack(0, offset))
+
+
 def _make_tcp_packets():
     """Build 5 TCP packets matching the test_conversation fixture (10.0.0.1:443 <-> 10.0.0.2:54321)."""
     packets = []
@@ -174,6 +185,93 @@ class TestSessionPackets:
             data = response.json()
             assert data["total"] == 0
             assert data["items"] == []
+        finally:
+            _cleanup_session_sidecars(test_capture.parsed_index_path)
+
+    async def test_invalid_proto_returns_422(
+        self, test_client_authenticated, test_capture, test_conversation
+    ):
+        packets = _make_tcp_packets()
+        _write_session_sidecars(test_capture.parsed_index_path, packets)
+        try:
+            response = await test_client_authenticated.get(
+                f"/api/captures/{test_capture.id}/session-packets",
+                params={
+                    "src_ip": "10.0.0.1", "src_port": 443,
+                    "dst_ip": "10.0.0.2", "dst_port": 54321,
+                    "proto": "icmp",
+                },
+            )
+            assert response.status_code == 422
+            assert response.json()["detail"] == "proto must be 'tcp' or 'udp'"
+        finally:
+            _cleanup_session_sidecars(test_capture.parsed_index_path)
+
+    async def test_structured_ports_match_when_info_is_display_text(
+        self, test_client_authenticated, test_capture, test_conversation
+    ):
+        packets = [{
+            "ts": 1000.0,
+            "src": "10.0.0.1", "dst": "10.0.0.2",
+            "proto": "TCP", "length": 66,
+            "sport": 443, "dport": 54321,
+            "info": "TLS Client Hello",
+        }]
+        _write_session_sidecars(test_capture.parsed_index_path, packets)
+        try:
+            response = await test_client_authenticated.get(
+                f"/api/captures/{test_capture.id}/session-packets",
+                params={
+                    "src_ip": "10.0.0.1", "src_port": 443,
+                    "dst_ip": "10.0.0.2", "dst_port": 54321,
+                    "proto": "tcp",
+                },
+            )
+            assert response.status_code == 200
+            assert response.json()["total"] == 1
+        finally:
+            _cleanup_session_sidecars(test_capture.parsed_index_path)
+
+    async def test_malformed_summary_lines_are_skipped(
+        self, test_client_authenticated, test_capture, test_conversation
+    ):
+        packets = _make_tcp_packets()
+        _write_session_sidecars(test_capture.parsed_index_path, packets)
+        _append_malformed_summary_line(test_capture.parsed_index_path)
+        try:
+            response = await test_client_authenticated.get(
+                f"/api/captures/{test_capture.id}/session-packets",
+                params={
+                    "src_ip": "10.0.0.1", "src_port": 443,
+                    "dst_ip": "10.0.0.2", "dst_port": 54321,
+                    "proto": "tcp",
+                },
+            )
+            assert response.status_code == 200
+            assert response.json()["total"] == 5
+        finally:
+            _cleanup_session_sidecars(test_capture.parsed_index_path)
+
+    async def test_repeated_requests_use_valid_session_cache(
+        self, test_client_authenticated, test_capture, test_conversation
+    ):
+        packets = _make_tcp_packets()
+        _write_session_sidecars(test_capture.parsed_index_path, packets)
+        try:
+            params = {
+                "src_ip": "10.0.0.1", "src_port": 443,
+                "dst_ip": "10.0.0.2", "dst_port": 54321,
+                "proto": "tcp",
+            }
+            first = await test_client_authenticated.get(
+                f"/api/captures/{test_capture.id}/session-packets", params=params
+            )
+            second = await test_client_authenticated.get(
+                f"/api/captures/{test_capture.id}/session-packets", params=params
+            )
+            assert first.status_code == 200
+            assert second.status_code == 200
+            assert second.json()["total"] == first.json()["total"] == 5
         finally:
             _cleanup_session_sidecars(test_capture.parsed_index_path)
 

@@ -1,7 +1,6 @@
 import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
 import { PanelGroup, Panel, PanelResizeHandle } from "react-resizable-panels";
 import type { PacketSummary, PacketDetail as PacketDetailType, GeoInfo } from "../api/client";
 import { getPacketDetail } from "../api/client";
@@ -37,7 +36,6 @@ export function SessionDataFlow({
   packets,
   total,
   srcIp,
-  dstIp,
   srcGeo,
   dstGeo,
   offset,
@@ -109,12 +107,12 @@ export function SessionDataFlow({
                           {pkt.idx}
                         </td>
                         <td className="whitespace-nowrap px-2 py-1 font-mono">
-                          <FlagIcon countryCode={geo.country_code} />
+                          <FlagIcon countryCode={geo.country_code} fallback={geo.country_flag} />
                           {pkt.src}
                         </td>
                         <td className="px-2 py-1 tabular-nums">{ports.sport}</td>
                         <td className="whitespace-nowrap px-2 py-1 font-mono">
-                          <FlagIcon countryCode={dGeo.country_code} />
+                          <FlagIcon countryCode={dGeo.country_code} fallback={dGeo.country_flag} />
                           {pkt.dst}
                         </td>
                         <td className="px-2 py-1 tabular-nums">{ports.dport}</td>

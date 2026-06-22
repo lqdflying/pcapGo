@@ -66,6 +66,7 @@ _SESSION_CACHE: OrderedDict[tuple, array.array] = OrderedDict()
 _SESSION_CACHE_BYTES = 0
 
 _PORT_RE = re.compile(r"^(\d+)\s*>\s*(\d+)")
+_SESSION_PROTOCOLS = {"tcp", "udp"}
 
 
 def _parse_ports_from_info(info: str) -> tuple[int, int]:
@@ -73,6 +74,22 @@ def _parse_ports_from_info(info: str) -> tuple[int, int]:
     if m:
         return int(m.group(1)), int(m.group(2))
     return 0, 0
+
+
+def _coerce_port(value: object) -> int | None:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.isdigit():
+        return int(value)
+    return None
+
+
+def _ports_from_summary(s: dict) -> tuple[int, int]:
+    sport = _coerce_port(s.get("sport") or s.get("src_port"))
+    dport = _coerce_port(s.get("dport") or s.get("dst_port"))
+    if sport is not None and dport is not None:
+        return sport, dport
+    return _parse_ports_from_info(s.get("info", ""))
 
 
 def _session_matches(
@@ -87,9 +104,7 @@ def _session_matches(
     rev = pkt_src == dst_ip and pkt_dst == src_ip
     if not fwd and not rev:
         return False
-    if src_port == 0 and dst_port == 0:
-        return True
-    sport, dport = _parse_ports_from_info(s.get("info", ""))
+    sport, dport = _ports_from_summary(s)
     if fwd:
         return sport == src_port and dport == dst_port
     return sport == dst_port and dport == src_port
@@ -522,6 +537,8 @@ async def session_packets(
     offsets_path = _offsets_path_for(capture)
     summary_path = _summary_path_for(capture)
     proto_l = proto.strip().lower()
+    if proto_l not in _SESSION_PROTOCOLS:
+        raise HTTPException(status_code=422, detail="proto must be 'tcp' or 'udp'")
 
     matching = await asyncio.to_thread(
         _scan_session_indices_sync,

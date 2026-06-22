@@ -221,7 +221,11 @@
     "direction": "Direction",
     "relativeTime": "Time",
     "index": "Index",
-    "info": "Info"
+    "info": "Info",
+    "zoomOut": "Shrink session window",
+    "zoomIn": "Grow session window",
+    "resetWindow": "Reset session window",
+    "resizeWindow": "Resize session window"
   },
   "captureCommand": {
     "platform": "Platform",

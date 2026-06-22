@@ -18,6 +18,18 @@ const geo: GeoInfo = {
   country_flag: "",
 };
 
+const fallbackSrcGeo: GeoInfo = {
+  country: "Unknown",
+  country_code: "XX",
+  country_flag: "🏳",
+};
+
+const fallbackDstGeo: GeoInfo = {
+  country: "Unknown",
+  country_code: "XX",
+  country_flag: "🏴",
+};
+
 const packets = [
   createMockPacketSummary({
     idx: 0,
@@ -141,5 +153,24 @@ describe("SessionDataFlow", () => {
     );
     expect(screen.getByText("443 > 54321 [SYN]")).toBeInTheDocument();
     expect(screen.getByText("54321 > 443 [SYN ACK]")).toBeInTheDocument();
+  });
+
+  it("renders backend flag fallback values for both endpoints", () => {
+    render(
+      <SessionDataFlow
+        captureId="cap-1"
+        packets={packets}
+        total={2}
+        srcIp="10.0.0.1"
+        dstIp="10.0.0.2"
+        srcGeo={fallbackSrcGeo}
+        dstGeo={fallbackDstGeo}
+        offset={0}
+        limit={200}
+      />,
+      { wrapper }
+    );
+    expect(screen.getAllByText("🏳").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("🏴").length).toBeGreaterThan(0);
   });
 });

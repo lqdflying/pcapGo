@@ -10,6 +10,12 @@ const geo: GeoInfo = {
   country_flag: "",
 };
 
+const fallbackGeo: GeoInfo = {
+  country: "Unknown",
+  country_code: "XX",
+  country_flag: "🏳",
+};
+
 const packets = [
   createMockPacketSummary({
     idx: 0,
@@ -183,5 +189,23 @@ describe("SessionSequenceDiagram", () => {
     );
     expect(screen.getByText(/Forward/)).toBeInTheDocument();
     expect(screen.getByText(/Reverse/)).toBeInTheDocument();
+  });
+
+  it("renders backend flag fallback when no SVG codepoint is available", () => {
+    render(
+      <SessionSequenceDiagram
+        packets={packets}
+        srcIp="10.0.0.1"
+        srcPort={443}
+        dstIp="10.0.0.2"
+        dstPort={54321}
+        srcGeo={fallbackGeo}
+        dstGeo={{ ...fallbackGeo, country_flag: "🏴" }}
+        proto="tcp"
+        appProtocol={null}
+      />
+    );
+    expect(screen.getByText("🏳")).toBeInTheDocument();
+    expect(screen.getByText("🏴")).toBeInTheDocument();
   });
 });
