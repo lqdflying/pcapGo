@@ -20,6 +20,19 @@ def test_private_classification_is_lan_but_documentation_range_is_not():
 
 
 @pytest.mark.unit
+def test_country_code_to_flag():
+    assert geoip.country_code_to_flag("US") == "\U0001F1FA\U0001F1F8"
+    assert geoip.country_code_to_flag("JP") == "\U0001F1EF\U0001F1F5"
+    assert geoip.country_code_to_flag("CN") == "\U0001F1E8\U0001F1F3"
+    assert geoip.country_code_to_flag("LAN") == ""
+    assert geoip.country_code_to_flag("XX") == ""
+    assert geoip.country_code_to_flag(None) == ""
+    assert geoip.country_code_to_flag("") == ""
+    assert geoip.country_code_to_flag("A") == ""
+    assert geoip.country_code_to_flag("USA") == ""
+
+
+@pytest.mark.unit
 def test_rejects_non_public_download_urls():
     for url in (
         "file:///tmp/GeoLite2-Country.mmdb",

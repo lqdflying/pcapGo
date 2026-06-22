@@ -64,8 +64,8 @@ describe("StatsTabs", () => {
   it("filters IPs by address in IP Statistics view", () => {
     const stats = createMockStatisticsResponse({
       ip_stats: [
-        { ip: "10.0.0.1", country: "Local Network", country_code: "LAN", earliest_time: 0, latest_time: 2.5, ports: [443], protocols: ["TLS"], total_sent_packets: 10, total_recv_packets: 0, total_sent_bytes: 1000, total_recv_bytes: 0, tcp_session_count: 1, udp_session_count: 0 },
-        { ip: "192.168.1.5", country: "Local Network", country_code: "LAN", earliest_time: 0, latest_time: 2.5, ports: [80], protocols: ["HTTP"], total_sent_packets: 20, total_recv_packets: 5, total_sent_bytes: 2000, total_recv_bytes: 500, tcp_session_count: 1, udp_session_count: 0 },
+        { ip: "10.0.0.1", country: "Local Network", country_code: "LAN", country_flag: "", earliest_time: 0, latest_time: 2.5, ports: [443], protocols: ["TLS"], total_sent_packets: 10, total_recv_packets: 0, total_sent_bytes: 1000, total_recv_bytes: 0, tcp_session_count: 1, udp_session_count: 0 },
+        { ip: "192.168.1.5", country: "Local Network", country_code: "LAN", country_flag: "", earliest_time: 0, latest_time: 2.5, ports: [80], protocols: ["HTTP"], total_sent_packets: 20, total_recv_packets: 5, total_sent_bytes: 2000, total_recv_bytes: 500, tcp_session_count: 1, udp_session_count: 0 },
       ],
     });
     render(<StatsTabs stats={stats} loading={false} />);

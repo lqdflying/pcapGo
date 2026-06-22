@@ -139,6 +139,7 @@ class IPStatsEntry(BaseModel):
     ip: str
     country: str | None = None
     country_code: str | None = None
+    country_flag: str | None = None
     earliest_time: float = 0.0
     latest_time: float = 0.0
     ports: list[int] = Field(default_factory=list)
@@ -166,6 +167,7 @@ class ProtoStatsEntry(BaseModel):
 class CountryStatsEntry(BaseModel):
     country: str
     country_code: str
+    country_flag: str = ""
     ip_count: int = 0
     total_packets: int = 0
     total_bytes: int = 0
