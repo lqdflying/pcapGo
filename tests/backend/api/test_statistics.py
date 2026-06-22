@@ -226,6 +226,7 @@ class TestGetStatistics:
         src = by_ip[test_conversation.src_ip]
         dst = by_ip[test_conversation.dst_ip]
         assert src["country_code"] == "LAN"
+        assert src["country_flag"] == ""
         assert src["country"] == "Local Network"
         assert src["total_sent_packets"] == 3
         assert src["total_recv_packets"] == 2
@@ -262,6 +263,7 @@ class TestGetStatistics:
         assert len(data["country_stats"]) >= 1
         lan = next((c for c in data["country_stats"] if c["country_code"] == "LAN"), None)
         assert lan is not None
+        assert lan["country_flag"] == ""
         assert lan["ip_count"] == 2
         assert lan["total_packets"] == 10
         assert lan["session_count"] == 2

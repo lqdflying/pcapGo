@@ -20,7 +20,7 @@ from app.schemas.capture import (
     ProtoStatsEntry,
     CountryStatsEntry,
 )
-from app.services.geoip import lookup_country
+from app.services.geoip import lookup_country, country_code_to_flag
 
 logger = logging.getLogger(__name__)
 
@@ -201,6 +201,7 @@ async def get_statistics(
                     "ip": ip,
                     "country": geo[1] if geo else None,
                     "country_code": geo[0] if geo else None,
+                    "country_flag": country_code_to_flag(geo[0]) if geo else None,
                     "earliest_time": c.start_ts,
                     "latest_time": c.end_ts,
                     "ports": set(),
@@ -236,6 +237,7 @@ async def get_statistics(
                 ip=a["ip"],
                 country=a["country"],
                 country_code=a["country_code"],
+                country_flag=a["country_flag"],
                 earliest_time=a["earliest_time"],
                 latest_time=a["latest_time"],
                 ports=sorted(a["ports"])[:20],
@@ -313,6 +315,7 @@ async def get_statistics(
             CountryStatsEntry(
                 country=ca["country"],
                 country_code=ca["code"],
+                country_flag=country_code_to_flag(ca["code"]),
                 ip_count=ca["ips"],
                 total_packets=ca["pkts"],
                 total_bytes=ca["bytes"],

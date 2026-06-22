@@ -6,7 +6,6 @@ import {
   SortHeader,
   FilterBox,
   formatBytes,
-  countryCodeToFlag,
   type SortDir,
 } from "./shared";
 
@@ -97,7 +96,7 @@ export function CountryStatsView({
           </thead>
           <tbody>
             {rows.map((e) => {
-              const flag = countryCodeToFlag(e.country_code);
+              const flag = e.country_flag;
               const isLan = e.country_code === "LAN";
               return (
                 <tr

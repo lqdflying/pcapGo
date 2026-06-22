@@ -136,6 +136,7 @@ export interface IPStatsEntry {
   ip: string;
   country: string | null;
   country_code: string | null;
+  country_flag: string | null;
   earliest_time: number;
   latest_time: number;
   ports: number[];
@@ -163,6 +164,7 @@ export interface ProtoStatsEntry {
 export interface CountryStatsEntry {
   country: string;
   country_code: string;
+  country_flag: string;
   ip_count: number;
   total_packets: number;
   total_bytes: number;

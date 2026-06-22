@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Wifi } from "lucide-react";
 import type { IPStatsEntry } from "../../api/client";
 import {
   SortHeader,
   FilterBox,
   formatBytes,
-  countryCodeToFlag,
   formatTimestamp,
   type SortDir,
 } from "./shared";
@@ -120,9 +120,11 @@ export function IPStatsView({
               >
                 <td className="py-1.5 pr-2 text-panel-text">{ep.ip}</td>
                 <td className="py-1.5 pr-2 text-panel-muted">
-                  {ep.country_code && (
-                    <span className="mr-1">{countryCodeToFlag(ep.country_code)}</span>
-                  )}
+                  {ep.country_code === "LAN" ? (
+                    <Wifi className="mr-1.5 inline h-3.5 w-3.5 text-panel-muted" />
+                  ) : ep.country_flag ? (
+                    <span className="mr-1">{ep.country_flag}</span>
+                  ) : null}
                   {ep.country ?? "-"}
                 </td>
                 <td className="py-1.5 pr-2 text-panel-muted">{formatTimestamp(ep.earliest_time)}</td>

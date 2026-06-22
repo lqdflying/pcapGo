@@ -219,6 +219,17 @@ def lookup_country(ip: str) -> tuple[str, str] | None:
         return None
 
 
+def country_code_to_flag(code: str | None) -> str:
+    if not code or code in ("LAN", "XX") or len(code) != 2:
+        return ""
+    base = 0x1F1E6
+    c1 = ord(code[0].upper()) - ord("A")
+    c2 = ord(code[1].upper()) - ord("A")
+    if not (0 <= c1 <= 25 and 0 <= c2 <= 25):
+        return ""
+    return chr(base + c1) + chr(base + c2)
+
+
 def _copy_stream_with_limit(src, dest_path: Path, max_bytes: int) -> int:
     written = 0
     with open(dest_path, "wb") as f:
