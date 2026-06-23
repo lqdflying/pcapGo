@@ -98,7 +98,7 @@ cd frontend && npm run typecheck
 cd frontend && npm run typecheck:test
 ```
 
-### Test Structure (22 test files under `frontend/src/__tests__/`)
+### Test Structure (23 test files under `frontend/src/__tests__/`)
 ```
 frontend/src/__tests__/
 ├── test-setup.ts                       # Global mocks + mock data factories
@@ -115,7 +115,7 @@ frontend/src/__tests__/
 │   ├── HexViewer.test.tsx             # Hex/ASCII dump formatting + highlighted byte ranges
 │   ├── StatsTabs.test.tsx             # Statistics tab navigation + Tx/Rx columns + IO graph controls
 │   ├── ConversationsView.test.tsx     # Conversations table sorting/filtering + Session/Follow actions
-│   ├── SessionView.test.tsx           # Session modal query construction, tab switching, GeoIP fallback
+│   ├── SessionView.test.tsx           # Session modal query construction, tab switching, GeoIP fallback, Filter packets callback
 │   ├── SessionSequenceDiagram.test.tsx # Virtualized sequence timeline + endpoint badges
 │   ├── SessionDataFlow.test.tsx       # Session packet table, pagination, detail panes, GeoIP fallback
 │   ├── FollowStream.test.tsx          # Follow-stream modal: ASCII/hex view + client/server coloring
@@ -127,7 +127,7 @@ frontend/src/__tests__/
     ├── Login.test.tsx                 # Unauthenticated redirect to GitHub + not_allowed copy
     ├── Dashboard.test.tsx             # Upload + captures list + admin all-captures controls + delete confirmation
     ├── Admin.test.tsx                 # Allowed-user CRUD and role-management UI
-    └── Capture.test.tsx               # 3-pane inspector + view toggle + Explain error surfacing + command dock
+    └── Capture.test.tsx               # 3-pane inspector + view toggle + connection-filter mode + Explain error surfacing + command dock
 ```
 
 ### Config (in `frontend/vite.config.ts` test block)

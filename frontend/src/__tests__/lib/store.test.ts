@@ -107,6 +107,7 @@ describe("useCaptureStore", () => {
       selectedIndices: [],
       lastClickedIdx: null,
       filterProto: "",
+      connectionFilter: null,
     });
   });
 
@@ -189,6 +190,55 @@ describe("useCaptureStore", () => {
     useCaptureStore.getState().selectPacket(5, "single");
     useCaptureStore.getState().clearSelection();
     const state = useCaptureStore.getState();
+    expect(state.selectedPacketIdx).toBeNull();
+    expect(state.selectedIndices).toEqual([]);
+    expect(state.lastClickedIdx).toBeNull();
+  });
+
+  it("setConnectionFilter stores the filter and clears packet selection", () => {
+    useCaptureStore.getState().selectPacket(5, "single");
+    useCaptureStore.getState().setConnectionFilter({
+      src_ip: "10.0.0.1",
+      src_port: 443,
+      dst_ip: "10.0.0.2",
+      dst_port: 54321,
+      proto: "tcp",
+      label: "10.0.0.1:443 ↔ 10.0.0.2:54321 (TLS)",
+    });
+
+    const state = useCaptureStore.getState();
+    expect(state.connectionFilter).toEqual({
+      src_ip: "10.0.0.1",
+      src_port: 443,
+      dst_ip: "10.0.0.2",
+      dst_port: 54321,
+      proto: "tcp",
+      label: "10.0.0.1:443 ↔ 10.0.0.2:54321 (TLS)",
+    });
+    expect(state.selectedPacketIdx).toBeNull();
+    expect(state.selectedIndices).toEqual([]);
+    expect(state.lastClickedIdx).toBeNull();
+  });
+
+  it("clearConnectionFilter clears the filter and packet selection", () => {
+    useCaptureStore.setState({
+      connectionFilter: {
+        src_ip: "10.0.0.1",
+        src_port: 443,
+        dst_ip: "10.0.0.2",
+        dst_port: 54321,
+        proto: "tcp",
+        label: "10.0.0.1:443 ↔ 10.0.0.2:54321 (TLS)",
+      },
+      selectedPacketIdx: 7,
+      selectedIndices: [5, 7],
+      lastClickedIdx: 7,
+    });
+
+    useCaptureStore.getState().clearConnectionFilter();
+
+    const state = useCaptureStore.getState();
+    expect(state.connectionFilter).toBeNull();
     expect(state.selectedPacketIdx).toBeNull();
     expect(state.selectedIndices).toEqual([]);
     expect(state.lastClickedIdx).toBeNull();

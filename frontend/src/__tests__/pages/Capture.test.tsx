@@ -7,21 +7,25 @@ import { createMockCapture } from "../test-setup";
 
 // Mock API client
 const mockApiGet = vi.fn();
+const mockGetPackets = vi.fn().mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200 });
+const mockGetSessionPackets = vi.fn().mockResolvedValue({ items: [], total: 0, offset: 0, limit: 100, src_geo: { country: null, country_code: null, country_flag: null }, dst_geo: { country: null, country_code: null, country_flag: null } });
+const mockGetStatistics = vi.fn().mockResolvedValue(null);
 const mockStreamExplainPackets = vi.fn();
 
 vi.mock("@/api/client", () => ({
   api: {
     get: (...args: any[]) => mockApiGet(...args),
   },
-  getPackets: vi.fn().mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200 }),
+  getPackets: (...args: any[]) => mockGetPackets(...args),
+  getSessionPackets: (...args: any[]) => mockGetSessionPackets(...args),
   getPacketDetail: vi.fn().mockResolvedValue(null),
-  getStatistics: vi.fn().mockResolvedValue(null),
+  getStatistics: (...args: any[]) => mockGetStatistics(...args),
   packetsExportUrl: vi.fn().mockReturnValue("/api/captures/test/export?format=csv"),
   streamExplainPackets: (...args: any[]) => mockStreamExplainPackets(...args),
 }));
 
 // Mock store
-import { useCaptureStore } from "@/lib/store";
+import { useCaptureStore, useAIDockStore } from "@/lib/store";
 
 function renderCapturePage(captureId = "test-capture-id") {
   const queryClient = new QueryClient({
@@ -45,7 +49,24 @@ function renderCapturePage(captureId = "test-capture-id") {
 describe("CapturePage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useCaptureStore.setState({ selectedPacketIdx: null, filterProto: "" });
+    useCaptureStore.setState({
+      selectedPacketIdx: null,
+      selectedIndices: [],
+      lastClickedIdx: null,
+      filterProto: "",
+      connectionFilter: null,
+    });
+    useAIDockStore.setState({ aiDockOpen: false, aiPoppedOut: false });
+    mockGetPackets.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200 });
+    mockGetStatistics.mockResolvedValue(null);
+    mockGetSessionPackets.mockResolvedValue({
+      items: [],
+      total: 0,
+      offset: 0,
+      limit: 100,
+      src_geo: { country: null, country_code: null, country_flag: null },
+      dst_geo: { country: null, country_code: null, country_flag: null },
+    });
     // Default: capture is in ready state
     mockApiGet.mockResolvedValue({
       data: createMockCapture({ status: "ready", filename: "test.pcap", packet_count: 42 }),
@@ -163,17 +184,18 @@ describe("CapturePage", () => {
       },
     );
 
-    // Select a packet so the Explain bar appears.
-    useCaptureStore.setState({
-      selectedPacketIdx: 0,
-      selectedIndices: [0],
-      lastClickedIdx: 0,
-    });
-
     await act(async () => {
       renderCapturePage();
     });
     await screen.findByText("test.pcap");
+
+    await act(async () => {
+      useCaptureStore.setState({
+        selectedPacketIdx: 0,
+        selectedIndices: [0],
+        lastClickedIdx: 0,
+      });
+    });
 
     const explainBtn = await screen.findByLabelText("Explain selected packets");
     await act(async () => {
@@ -183,5 +205,87 @@ describe("CapturePage", () => {
     expect(
       await screen.findByText("LLM is not configured on this server"),
     ).toBeInTheDocument();
+  });
+
+  it("filters by a selected session tuple and clears back to normal packet controls", async () => {
+    mockGetStatistics.mockResolvedValue({
+      capture_id: "test-capture-id",
+      packet_count: 42,
+      duration: 1,
+      protocols: [],
+      endpoints: [],
+      conversations: [
+        {
+          id: "conv-1",
+          proto: "tcp",
+          src_ip: "10.0.0.1",
+          src_port: 443,
+          dst_ip: "10.0.0.2",
+          dst_port: 54321,
+          packet_count: 12,
+          byte_count: 1200,
+          start_ts: 0,
+          end_ts: 1,
+          app_protocol: "TLS",
+          flags_summary: "SYN,ACK",
+        },
+      ],
+      io_buckets: [],
+      ip_stats: [],
+      proto_stats: [],
+      country_stats: [],
+      bucket_seconds: 1,
+      metric: "packets",
+    });
+    mockGetSessionPackets.mockResolvedValue({
+      items: [],
+      total: 12,
+      offset: 0,
+      limit: 100,
+      src_geo: { country: null, country_code: null, country_flag: null },
+      dst_geo: { country: null, country_code: null, country_flag: null },
+    });
+
+    await act(async () => {
+      renderCapturePage();
+    });
+
+    await act(async () => {
+      fireEvent.click(await screen.findByText("Statistics"));
+    });
+    await act(async () => {
+      fireEvent.click(await screen.findByText("Conversations"));
+    });
+    await act(async () => {
+      fireEvent.click((await screen.findAllByText("Session"))[0]);
+    });
+    await act(async () => {
+      fireEvent.click(await screen.findByText("Filter packets"));
+    });
+
+    expect(await screen.findByText("10.0.0.1:443 ↔ 10.0.0.2:54321 (TLS)")).toBeInTheDocument();
+    expect(mockGetSessionPackets).toHaveBeenCalledWith("test-capture-id", {
+      src_ip: "10.0.0.1",
+      src_port: 443,
+      dst_ip: "10.0.0.2",
+      dst_port: 54321,
+      proto: "tcp",
+      offset: 0,
+      limit: 100,
+    });
+    expect(screen.getByLabelText("Search packets")).toBeDisabled();
+    expect(screen.getByLabelText("Filter by protocol")).toBeDisabled();
+    expect(screen.queryByLabelText("Export packets as CSV")).not.toBeInTheDocument();
+    expect(screen.queryByText("AI Tools")).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Clear connection filter"));
+    });
+
+    expect(screen.queryByText("10.0.0.1:443 ↔ 10.0.0.2:54321 (TLS)")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Search packets")).not.toBeDisabled();
+    expect(screen.getByLabelText("Filter by protocol")).not.toBeDisabled();
+    expect(screen.getByLabelText("Export packets as CSV")).toBeInTheDocument();
+    expect(mockGetPackets).toHaveBeenCalledWith("test-capture-id", 0, 100, "", "");
   });
 });

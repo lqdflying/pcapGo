@@ -227,7 +227,7 @@
     "zoomIn": "Grow session window",
     "resetWindow": "Reset session window",
     "resizeWindow": "Resize session window",
-    "jumpToPackets": "Filter & Chat"
+    "jumpToPackets": "Filter packets"
   },
   "captureCommand": {
     "platform": "Platform",

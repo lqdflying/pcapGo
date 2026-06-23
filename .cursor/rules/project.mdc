@@ -137,7 +137,7 @@ Test DB: `postgresql+asyncpg://pcap:pcap@localhost:5432/pcap_test`
 
 ### Test Coverage Summary
 - **Backend**: 363 tests (unit + integration + migrations) — requires PostgreSQL
-- **Frontend**: 19 test files (282 tests) — self-contained, no server needed
+- **Frontend**: 23 test files (327 tests) — self-contained, no server needed
 - **Test frameworks**: pytest + pytest-asyncio (backend), vitest + @testing-library/react (frontend)
 
 ## Environment Variables

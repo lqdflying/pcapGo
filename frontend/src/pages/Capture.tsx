@@ -33,7 +33,7 @@ import {
   type ConversationStats,
 } from "../api/client";
 import { api } from "../api/client";
-import { useCaptureStore, useThemeStore, useLanguageStore, useAIDockStore, type Theme, type Language, type ConnectionFilter } from "../lib/store";
+import { useCaptureStore, useThemeStore, useLanguageStore, useAIDockStore, type Theme, type Language } from "../lib/store";
 import { PacketList } from "../components/PacketList";
 import { PacketTree } from "../components/PacketTree";
 import { HexViewer } from "../components/HexViewer";
@@ -175,6 +175,19 @@ export function CapturePage() {
   }, [filterProto, appliedSearch, pageSize, connectionFilter]);
 
   useEffect(() => {
+    clearConnectionFilter();
+    setPacketDetail(null);
+    setHighlight(null);
+  }, [id, clearConnectionFilter]);
+
+  useEffect(() => {
+    if (selectedPacketIdx !== null) return;
+    setPacketDetail(null);
+    setHighlight(null);
+    setDetailLoading(false);
+  }, [selectedPacketIdx]);
+
+  useEffect(() => {
     if (selectedPacketIdx === null || !id) return;
     setDetailLoading(true);
     getPacketDetail(id, selectedPacketIdx)
@@ -191,16 +204,19 @@ export function CapturePage() {
   };
 
   const handleSelectEndpoint = (ip: string) => {
+    clearConnectionFilter();
     applySearch(ip);
     setViewMode("packets");
   };
 
   const handleSelectConversation = (conv: ConversationStats) => {
+    clearConnectionFilter();
     applySearch(conv.src_ip);
     setViewMode("packets");
   };
 
   const handleSelectProtocol = (proto: string) => {
+    clearConnectionFilter();
     setFilterProto(proto.toLowerCase());
     setViewMode("packets");
   };
@@ -218,8 +234,7 @@ export function CapturePage() {
     setSessionConv(null);
     setViewMode("packets");
     setPage(0);
-    setAiDockOpen(true);
-  }, [setConnectionFilter, setAiDockOpen]);
+  }, [setConnectionFilter]);
 
   const handleBucketChange = (bs: number, metric: "packets" | "bytes") => {
     setBucketSeconds(bs);

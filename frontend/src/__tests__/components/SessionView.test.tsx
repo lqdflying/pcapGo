@@ -247,6 +247,32 @@ describe("SessionView", () => {
     });
   });
 
+  it("shows the jump button only when provided and calls onJumpToPackets", () => {
+    const onJumpToPackets = vi.fn();
+    const { rerender } = render(
+      <SessionView
+        captureId="cap-1"
+        conversation={mockConv}
+        onClose={vi.fn()}
+      />,
+      { wrapper }
+    );
+
+    expect(screen.queryByText("Filter packets")).not.toBeInTheDocument();
+
+    rerender(
+      <SessionView
+        captureId="cap-1"
+        conversation={mockConv}
+        onClose={vi.fn()}
+        onJumpToPackets={onJumpToPackets}
+      />
+    );
+
+    fireEvent.click(screen.getByText("Filter packets"));
+    expect(onJumpToPackets).toHaveBeenCalledWith(mockConv);
+  });
+
   it("shows duration in header", () => {
     render(
       <SessionView

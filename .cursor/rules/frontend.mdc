@@ -21,7 +21,7 @@ Runs on `http://localhost:5173`, proxies `/api` and `/auth` to backend at `local
 - `PacketTree` — expandable protocol layer tree; clicking a layer highlights its bytes in `HexViewer`.
 - `HexViewer` — hex/ASCII dump of selected packet with highlighted layer byte ranges.
 - `StatsTabs` — protocol hierarchy, endpoints (Tx/Rx), conversations, IP/country statistics, IO graph (bucket/metric controls); endpoint rows can filter the packet list, while conversation rows expose explicit Session and Follow actions. IP/country/session views render SVG flag icons from backend country codes, keep backend-provided `country_flag` as fallback data, and use the local-network icon for `LAN`; do not print native flag emoji directly because Windows may render regional-indicator letters instead of flags.
-- `SessionView`, `SessionSequenceDiagram`, `SessionDataFlow` — modal session inspector launched from the Conversations table. Sequence mode requests up to 5000 packets at offset 0; data-flow mode paginates with detail panes powered by `getPacketDetail`. Pass both `country_code` and `country_flag` into `FlagIcon` whenever rendering `GeoInfo`.
+- `SessionView`, `SessionSequenceDiagram`, `SessionDataFlow` — modal session inspector launched from the Conversations table. Sequence mode requests up to 5000 packets at offset 0; data-flow mode paginates with detail panes powered by `getPacketDetail`. The header's Filter packets action jumps back to the main packet list with an exact TCP/UDP 5-tuple connection filter; do not use chat-oriented copy for this action. Pass both `country_code` and `country_flag` into `FlagIcon` whenever rendering `GeoInfo`.
 - `FollowStream` — modal that reconstructs one TCP/UDP conversation's payload (ASCII or hex view), client vs server color-coded; truncation banner when the 1 MB/direction cap is hit.
 - `CaptureCommandPanel` — dockable panel that hosts two modes (tabs): `CaptureCommandBuilder` (form-driven tcpdump/pktmon command with shell-escaped args + live preview + Copy) and `CaptureCommandAIGenerator` (natural-language → tcpdump/pktmon command via `/api/capture-command/generate` SSE; optional capture context). Panel keeps a shared `command` state but clears it on tab switch and at AI-generate start so a stale command can't be copied. Can pop out into a `FloatingWindow`.
 - `AIChatPanel` and `ChatSessionSidebar` — persisted capture chat UI. The sidebar lists per-user sessions ordered by backend `updated_at`, supports resume/new-chat flows, and has selection mode for batch delete. When `AIChatPanel` creates a new thread, keep the local sidebar list fresh immediately instead of waiting for a long stream to finish.
@@ -32,7 +32,7 @@ Runs on `http://localhost:5173`, proxies `/api` and `/auth` to backend at `local
 - `Login` — probes `/auth/me` on mount; GitHub OAuth redirect via `/auth/github/login`; shows `auth_error=not_allowed` when a GitHub login is not in the allowlist and preserves relative deep links including query strings.
 - `Dashboard` — upload area + captures list with status polling and delete confirmation. `super_admin` users see an Admin button and can toggle `all=true` capture listing with optional owner filtering.
 - `Admin` — super-admin-only page at `/admin` for allowed GitHub user CRUD, role changes, seed-admin display, and login status.
-- `Capture` — 3-pane inspector with view mode toggle (Packets / Statistics), protocol dropdown, substring search, CSV/JSON export buttons, Session and Follow Stream launch from conversation rows, multi-select packets (click / ctrl-click / shift-range) with an "Explain selected packets" bar (one-shot `/explain` SSE), and a right-side Capture Command dock (toggle + pop-out via `FloatingWindow`). AI chat is reached via the Dashboard threads, not a Capture view mode.
+- `Capture` — 3-pane inspector with view mode toggle (Packets / Statistics), protocol dropdown, substring search, CSV/JSON export buttons, Session and Follow Stream launch from conversation rows, session-to-packet-list connection filtering by exact TCP/UDP 5-tuple, multi-select packets (click / ctrl-click / shift-range) with an "Explain selected packets" bar (one-shot `/explain` SSE), and a right-side Capture Command dock (toggle + pop-out via `FloatingWindow`). AI chat is reached via the Dashboard threads, not a Capture view mode.
 
 ## Internationalization
 - `react-i18next` is initialized from `src/i18n/i18n.ts`; translations live under `src/i18n/locales/{en,zh}/translation.json`.
@@ -49,7 +49,7 @@ Runs on `http://localhost:5173`, proxies `/api` and `/auth` to backend at `local
 
 ## State Management
 - `useAuthStore` (Zustand) holds the current `User | null` and `loading` state.
-- `useCaptureStore` (Zustand) holds the selected packet index, multi-select state (`selectedIndices`, `lastClickedIdx`), and protocol filter.
+- `useCaptureStore` (Zustand) holds the selected packet index, multi-select state (`selectedIndices`, `lastClickedIdx`), protocol filter, and optional exact 5-tuple `connectionFilter` used when jumping from Session View back to the main packet list.
 - `useThemeStore` (Zustand) holds the active theme (`dark` | `light` | `obsidian`) and applies it to `document.documentElement` via `applyTheme` (sets `data-theme`).
 - `useAIDockStore` (Zustand) tracks the Capture Command dock open/pop-out UI state.
 - `src/hooks/` exists as an empty directory; place future custom hooks there, not in `lib/`.
@@ -80,11 +80,11 @@ cd frontend && npm run typecheck           # App TypeScript check
 cd frontend && npm run typecheck:test      # Test TypeScript check
 ```
 
-Tests live in `frontend/src/__tests__/`, organized by `components/`, `pages/`, `api/`, and `lib/`. 22 test files cover:
-- **Components** (14): Uploader, PacketList, PacketTree, HexViewer, StatsTabs, ConversationsView, SessionView, SessionSequenceDiagram, SessionDataFlow, FollowStream, CaptureCommandPanel, CaptureCommandBuilder, CaptureCommandAIGenerator, FloatingWindow
-- **Pages** (4): Login, Dashboard, Admin, Capture
+Tests live in `frontend/src/__tests__/`, organized by `components/`, `pages/`, `api/`, and `lib/`. 23 test files cover:
+- **Components** (14): Uploader, PacketList, PacketTree, HexViewer, StatsTabs, ConversationsView, SessionView (including Filter packets callback), SessionSequenceDiagram, SessionDataFlow, FollowStream, CaptureCommandPanel, CaptureCommandBuilder, CaptureCommandAIGenerator, FloatingWindow
+- **Pages** (4): Login, Dashboard, Admin, Capture (including connection-filter mode)
 - **App router** (1): routing based on auth state
-- **Pure logic** (2): API client (axios), Zustand stores, captureCommandBuilder (incl. shell-escaping)
+- **Pure logic** (2): API client (axios), Zustand stores (including connectionFilter), captureCommandBuilder (incl. shell-escaping)
 
 `vitest` config in `vite.config.ts` uses `jsdom`, `globals: true`, and `setupFiles: ["./src/test-setup.ts"]`.
 - `src/test-setup.ts` is the configured setup file and is shared with `src/__tests__/test-setup.ts`; use `@/` alias imports inside setup code so paths resolve from both locations.

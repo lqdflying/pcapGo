@@ -21,7 +21,7 @@ docker compose -f tests/docker-compose.yml stop postgres
 
 ### Frontend (self-contained, no server needed)
 ```bash
-cd frontend && npx vitest run              # ✓ 282 passed (19 files)
+cd frontend && npx vitest run              # ✓ 327 passed (23 files)
 cd frontend && npm run typecheck           # app typecheck
 cd frontend && npm run typecheck:test      # test typecheck
 ```
@@ -102,7 +102,7 @@ PostgreSQL up for any backend run.
 | Suite | Expected | Command |
 |---|---|---|
 | Backend | 363 passed, 0 failed | `cd backend && python -m pytest` |
-| Frontend tests | 282 passed, 19 files | `cd frontend && npx vitest run` |
+| Frontend tests | 327 passed, 23 files | `cd frontend && npx vitest run` |
 | Frontend app typecheck | clean | `cd frontend && npm run typecheck` |
 | Frontend test typecheck | clean | `cd frontend && npm run typecheck:test` |
 
