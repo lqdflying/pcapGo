@@ -122,6 +122,15 @@ export const useAIDockStore = create<AIDockState>((set) => ({
 
 // ── Capture ────────────────────────────────────────────────────────────
 
+export interface ConnectionFilter {
+  src_ip: string;
+  src_port: number;
+  dst_ip: string;
+  dst_port: number;
+  proto: string;
+  label: string;
+}
+
 type SelectMode = "single" | "toggle" | "range";
 
 interface CaptureStore {
@@ -129,11 +138,14 @@ interface CaptureStore {
   selectedIndices: number[];
   lastClickedIdx: number | null;
   filterProto: string;
+  connectionFilter: ConnectionFilter | null;
   setSelectedPacket: (idx: number | null) => void;
   selectPacket: (idx: number, mode: SelectMode, pageIndices?: number[]) => void;
   setSelection: (indices: number[], anchor: number | null) => void;
   clearSelection: () => void;
   setFilterProto: (proto: string) => void;
+  setConnectionFilter: (filter: ConnectionFilter | null) => void;
+  clearConnectionFilter: () => void;
 }
 
 export const useCaptureStore = create<CaptureStore>((set, get) => ({
@@ -141,6 +153,7 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
   selectedIndices: [],
   lastClickedIdx: null,
   filterProto: "",
+  connectionFilter: null,
 
   setSelectedPacket: (idx) =>
     set({
@@ -226,6 +239,22 @@ export const useCaptureStore = create<CaptureStore>((set, get) => ({
   setFilterProto: (proto) =>
     set({
       filterProto: proto,
+      selectedPacketIdx: null,
+      selectedIndices: [],
+      lastClickedIdx: null,
+    }),
+
+  setConnectionFilter: (filter) =>
+    set({
+      connectionFilter: filter,
+      selectedPacketIdx: null,
+      selectedIndices: [],
+      lastClickedIdx: null,
+    }),
+
+  clearConnectionFilter: () =>
+    set({
+      connectionFilter: null,
       selectedPacketIdx: null,
       selectedIndices: [],
       lastClickedIdx: null,

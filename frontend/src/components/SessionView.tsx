@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { X, Loader2, Minus, Plus, RotateCcw } from "lucide-react";
+import { X, Loader2, Minus, Plus, RotateCcw, ListFilter } from "lucide-react";
 import type { ConversationStats } from "../api/client";
 import { getSessionPackets } from "../api/client";
 import { SessionSequenceDiagram } from "./SessionSequenceDiagram";
@@ -12,6 +12,7 @@ interface Props {
   captureId: string;
   conversation: ConversationStats;
   onClose: () => void;
+  onJumpToPackets?: (conv: ConversationStats) => void;
 }
 
 interface Geom {
@@ -53,7 +54,7 @@ function clampGeom(geom: Geom): Geom {
   };
 }
 
-export function SessionView({ captureId, conversation, onClose }: Props) {
+export function SessionView({ captureId, conversation, onClose, onJumpToPackets }: Props) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>("sequence");
   const [offset, setOffset] = useState(0);
@@ -192,6 +193,18 @@ export function SessionView({ captureId, conversation, onClose }: Props) {
             {((conversation.end_ts - conversation.start_ts) * 1000).toFixed(0)}{" "}
             ms
           </span>
+
+          {onJumpToPackets && (
+            <button
+              onClick={() => onJumpToPackets(conversation)}
+              title={t("session.jumpToPackets")}
+              className="flex items-center gap-1 rounded border border-panel-accent/30 bg-panel-accent/10 px-2 py-0.5 text-[10px] font-medium text-panel-accent hover:bg-panel-accent/20"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <ListFilter className="h-3 w-3" />
+              {t("session.jumpToPackets")}
+            </button>
+          )}
 
           <div
             className="ml-auto flex overflow-hidden rounded border border-panel-border"

@@ -18,9 +18,11 @@ import {
   Square,
   X,
   Languages,
+  ListFilter,
 } from "lucide-react";
 import {
   getPackets,
+  getSessionPackets,
   getPacketDetail,
   getStatistics,
   packetsExportUrl,
@@ -31,7 +33,7 @@ import {
   type ConversationStats,
 } from "../api/client";
 import { api } from "../api/client";
-import { useCaptureStore, useThemeStore, useLanguageStore, useAIDockStore, type Theme, type Language } from "../lib/store";
+import { useCaptureStore, useThemeStore, useLanguageStore, useAIDockStore, type Theme, type Language, type ConnectionFilter } from "../lib/store";
 import { PacketList } from "../components/PacketList";
 import { PacketTree } from "../components/PacketTree";
 import { HexViewer } from "../components/HexViewer";
@@ -87,6 +89,9 @@ export function CapturePage() {
     selectPacket,
     filterProto,
     setFilterProto,
+    connectionFilter,
+    setConnectionFilter,
+    clearConnectionFilter,
   } = useCaptureStore();
   const { theme, setTheme } = useThemeStore();
   const { language, setLanguage } = useLanguageStore();
@@ -134,9 +139,23 @@ export function CapturePage() {
   });
 
   const packetsQuery = useQuery({
-    queryKey: ["packets", id, filterProto, appliedSearch, page, pageSize],
+    queryKey: connectionFilter
+      ? ["session-packets", id, connectionFilter.src_ip, connectionFilter.src_port,
+         connectionFilter.dst_ip, connectionFilter.dst_port, connectionFilter.proto,
+         page, pageSize]
+      : ["packets", id, filterProto, appliedSearch, page, pageSize],
     queryFn: () =>
-      getPackets(id!, page * pageSize, pageSize, filterProto, appliedSearch),
+      connectionFilter
+        ? getSessionPackets(id!, {
+            src_ip: connectionFilter.src_ip,
+            src_port: connectionFilter.src_port,
+            dst_ip: connectionFilter.dst_ip,
+            dst_port: connectionFilter.dst_port,
+            proto: connectionFilter.proto,
+            offset: page * pageSize,
+            limit: pageSize,
+          })
+        : getPackets(id!, page * pageSize, pageSize, filterProto, appliedSearch),
     enabled: captureQuery.data?.status === "ready",
   });
 
@@ -153,7 +172,7 @@ export function CapturePage() {
 
   useEffect(() => {
     setPage(0);
-  }, [filterProto, appliedSearch, pageSize]);
+  }, [filterProto, appliedSearch, pageSize, connectionFilter]);
 
   useEffect(() => {
     if (selectedPacketIdx === null || !id) return;
@@ -185,6 +204,22 @@ export function CapturePage() {
     setFilterProto(proto.toLowerCase());
     setViewMode("packets");
   };
+
+  const handleJumpToPackets = useCallback((conv: ConversationStats) => {
+    const label = `${conv.src_ip}:${conv.src_port} ↔ ${conv.dst_ip}:${conv.dst_port} (${(conv.app_protocol ?? conv.proto).toUpperCase()})`;
+    setConnectionFilter({
+      src_ip: conv.src_ip,
+      src_port: conv.src_port,
+      dst_ip: conv.dst_ip,
+      dst_port: conv.dst_port,
+      proto: conv.proto,
+      label,
+    });
+    setSessionConv(null);
+    setViewMode("packets");
+    setPage(0);
+    setAiDockOpen(true);
+  }, [setConnectionFilter, setAiDockOpen]);
 
   const handleBucketChange = (bs: number, metric: "packets" | "bytes") => {
     setBucketSeconds(bs);
@@ -277,6 +312,24 @@ export function CapturePage() {
             ))}
           </div>
 
+          {/* Connection filter badge */}
+          {connectionFilter && viewMode === "packets" && (
+            <div className="flex items-center gap-1 rounded-lg border border-panel-accent/30 bg-panel-accent/10 px-2 py-1">
+              <ListFilter className="h-3 w-3 shrink-0 text-panel-accent" />
+              <span className="max-w-xs truncate text-[11px] font-medium text-panel-accent">
+                {connectionFilter.label}
+              </span>
+              <button
+                onClick={() => clearConnectionFilter()}
+                aria-label={t("capture.clearConnectionFilter")}
+                title={t("capture.clearConnectionFilter")}
+                className="ml-1 rounded p-0.5 text-panel-accent hover:bg-panel-accent/20"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+
           {/* Capture Command dock toggle */}
           {viewMode === "packets" && (
             <>
@@ -310,13 +363,14 @@ export function CapturePage() {
           {/* Packet search, protocol filter, export */}
           {viewMode === "packets" && (
             <>
-              <div className="relative">
+              <div className={`relative${connectionFilter ? " opacity-40 pointer-events-none" : ""}`}>
                 <Search className="pointer-events-none absolute left-2 top-1.5 h-3.5 w-3.5 text-panel-muted" />
                 <input
                   aria-label={t("capture.searchPackets")}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder={t("capture.searchPlaceholder")}
+                  disabled={!!connectionFilter}
                   className="w-52 rounded border border-panel-border bg-panel-bg py-1 pl-7 pr-2 text-xs text-panel-text focus:border-panel-accent focus:outline-none"
                 />
               </div>
@@ -324,7 +378,8 @@ export function CapturePage() {
                 aria-label={t("capture.filterByProtocol")}
                 value={filterProto}
                 onChange={(e) => setFilterProto(e.target.value)}
-                className="rounded border border-panel-border bg-panel-bg px-2 py-1 text-xs text-panel-text focus:border-panel-accent focus:outline-none"
+                disabled={!!connectionFilter}
+                className={`rounded border border-panel-border bg-panel-bg px-2 py-1 text-xs text-panel-text focus:border-panel-accent focus:outline-none${connectionFilter ? " opacity-40 pointer-events-none" : ""}`}
               >
                 {PROTOCOL_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -332,6 +387,7 @@ export function CapturePage() {
                   </option>
                 ))}
               </select>
+              {!connectionFilter && (
               <a
                 href={packetsExportUrl(id!, "csv", filterProto, appliedSearch)}
                 download
@@ -341,6 +397,7 @@ export function CapturePage() {
               >
                 <Download className="h-3.5 w-3.5" /> {t("capture.csv")}
               </a>
+              )}
             </>
           )}
           <div className="flex items-center gap-1 rounded border border-panel-border px-1">
@@ -581,6 +638,7 @@ export function CapturePage() {
           captureId={id!}
           conversation={sessionConv}
           onClose={() => setSessionConv(null)}
+          onJumpToPackets={handleJumpToPackets}
         />
       )}
     </div>

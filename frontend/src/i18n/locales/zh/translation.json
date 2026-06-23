@@ -72,7 +72,8 @@
     "explanationFailed": "解释请求失败。",
     "aiTools": "AI 工具",
     "parsingFailed": "解析失败，请重新上传。",
-    "parsingCapture": "正在解析数据包捕获..."
+    "parsingCapture": "正在解析数据包捕获...",
+    "clearConnectionFilter": "清除连接筛选"
   },
   "admin": {
     "backToDashboard": "返回仪表盘",
@@ -225,7 +226,8 @@
     "zoomOut": "缩小会话窗口",
     "zoomIn": "放大会话窗口",
     "resetWindow": "重置会话窗口",
-    "resizeWindow": "调整会话窗口大小"
+    "resizeWindow": "调整会话窗口大小",
+    "jumpToPackets": "筛选并聊天"
   },
   "captureCommand": {
     "platform": "平台",
