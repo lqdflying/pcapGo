@@ -246,6 +246,7 @@ export interface ChatThread {
   id: string;
   title: string;
   created_at: string;
+  updated_at: string;
   message_count: number;
 }
 
@@ -260,6 +261,7 @@ export interface ChatThreadDetail {
   id: string;
   title: string;
   created_at: string;
+  updated_at: string;
   messages: ChatMessage[];
 }
 
@@ -373,6 +375,17 @@ export async function deleteChatThread(
   threadId: string
 ): Promise<void> {
   await api.delete(`/api/captures/${captureId}/threads/${threadId}`);
+}
+
+export async function batchDeleteChatThreads(
+  captureId: string,
+  threadIds: string[]
+): Promise<{ deleted: number }> {
+  const { data } = await api.post(
+    `/api/captures/${captureId}/threads/batch-delete`,
+    { thread_ids: threadIds }
+  );
+  return data;
 }
 
 // Stream an assistant reply over SSE using fetch (EventSource can't POST). The

@@ -28,6 +28,7 @@ class ChatThreadRead(BaseModel):
     id: uuid.UUID
     title: str
     created_at: datetime
+    updated_at: datetime
     message_count: int = 0
 
     model_config = {"from_attributes": True}
@@ -37,6 +38,11 @@ class ChatThreadDetail(BaseModel):
     id: uuid.UUID
     title: str
     created_at: datetime
+    updated_at: datetime
     messages: list[ChatMessageRead] = []
 
     model_config = {"from_attributes": True}
+
+
+class ChatThreadBatchDelete(BaseModel):
+    thread_ids: list[uuid.UUID]

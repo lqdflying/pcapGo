@@ -117,12 +117,19 @@ class ChatThread(Base):
     capture_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("captures.id", ondelete="CASCADE"), index=True
     )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
     title: Mapped[str] = mapped_column(String(255), default="New chat")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     capture = relationship("Capture", back_populates="chat_threads")
+    user = relationship("User")
     messages = relationship(
         "ChatMessage",
         back_populates="thread",
