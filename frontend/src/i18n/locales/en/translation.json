@@ -72,7 +72,8 @@
     "explanationFailed": "Explanation request failed.",
     "aiTools": "AI Tools",
     "parsingFailed": "Parsing failed. Please re-upload.",
-    "parsingCapture": "Parsing packet capture..."
+    "parsingCapture": "Parsing packet capture...",
+    "clearConnectionFilter": "Clear connection filter"
   },
   "admin": {
     "backToDashboard": "Back to Dashboard",
@@ -225,7 +226,8 @@
     "zoomOut": "Shrink session window",
     "zoomIn": "Grow session window",
     "resetWindow": "Reset session window",
-    "resizeWindow": "Resize session window"
+    "resizeWindow": "Resize session window",
+    "jumpToPackets": "Filter & Chat"
   },
   "captureCommand": {
     "platform": "Platform",
