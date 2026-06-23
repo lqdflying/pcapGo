@@ -304,7 +304,17 @@
     "selectedAsContext": "{{count}} 个数据包已选为上下文",
     "askPlaceholder": "询问关于选中的数据包...",
     "newChat": "新对话",
-    "chatFailed": "对话请求失败。"
+    "chatFailed": "对话请求失败。",
+    "sessionHistory": "会话历史",
+    "sessions": "会话列表",
+    "noSessions": "暂无历史会话",
+    "deleteSelected": "删除选中 ({{count}})",
+    "deleteSelectedConfirm": "删除 {{count}} 个会话？此操作无法撤销。",
+    "selectSessions": "选择",
+    "cancelSelection": "取消",
+    "deleteSuccess": "已删除 {{count}} 个会话",
+    "deleteFailed": "删除会话失败",
+    "messagesCount": "{{count}} 条消息"
   },
   "followStream": {
     "title": "跟踪流",

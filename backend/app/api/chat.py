@@ -8,7 +8,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 
 from app.config import settings
 from app.db.session import async_session
@@ -20,6 +20,7 @@ from app.schemas.chat import (
     ChatThreadDetail,
     ChatMessageCreate,
     ChatMessageRead,
+    ChatThreadBatchDelete,
 )
 from app.services.llm import chat_stream, explain_packets_stream
 from app.api.packets import (
@@ -45,11 +46,12 @@ async def _get_owned_thread(
     session, capture_id: uuid.UUID, thread_id: uuid.UUID, user: User
 ) -> ChatThread:
     await _get_owned_capture(session, capture_id, user)
-    result = await session.execute(
-        select(ChatThread).where(
-            ChatThread.id == thread_id, ChatThread.capture_id == capture_id
-        )
+    query = select(ChatThread).where(
+        ChatThread.id == thread_id, ChatThread.capture_id == capture_id
     )
+    if user.role != "super_admin":
+        query = query.where(ChatThread.user_id == user.id)
+    result = await session.execute(query)
     thread = result.scalar_one_or_none()
     if not thread:
         raise HTTPException(status_code=404, detail="Thread not found")
@@ -147,20 +149,26 @@ async def list_threads(
 ):
     async with async_session() as session:
         await _get_owned_capture(session, capture_id, user)
-        result = await session.execute(
+        query = (
             select(
                 ChatThread,
                 func.count(ChatMessage.id),
             )
             .outerjoin(ChatMessage, ChatMessage.thread_id == ChatThread.id)
             .where(ChatThread.capture_id == capture_id)
-            .group_by(ChatThread.id)
-            .order_by(ChatThread.created_at.desc())
         )
+        if user.role != "super_admin":
+            query = query.where(ChatThread.user_id == user.id)
+        query = query.group_by(ChatThread.id).order_by(ChatThread.updated_at.desc())
+        result = await session.execute(query)
         rows = result.all()
     return [
         ChatThreadRead(
-            id=t.id, title=t.title, created_at=t.created_at, message_count=count
+            id=t.id,
+            title=t.title,
+            created_at=t.created_at,
+            updated_at=t.updated_at,
+            message_count=count,
         )
         for t, count in rows
     ]
@@ -176,13 +184,18 @@ async def create_thread(
         await _get_owned_capture(session, capture_id, user)
         thread = ChatThread(
             capture_id=capture_id,
+            user_id=user.id,
             title=(body.title or "New chat").strip()[:255] or "New chat",
         )
         session.add(thread)
         await session.commit()
         await session.refresh(thread)
     return ChatThreadRead(
-        id=thread.id, title=thread.title, created_at=thread.created_at, message_count=0
+        id=thread.id,
+        title=thread.title,
+        created_at=thread.created_at,
+        updated_at=thread.updated_at,
+        message_count=0,
     )
 
 
@@ -204,6 +217,7 @@ async def get_thread(
         id=thread.id,
         title=thread.title,
         created_at=thread.created_at,
+        updated_at=thread.updated_at,
         messages=[ChatMessageRead.model_validate(m) for m in messages],
     )
 
@@ -219,6 +233,27 @@ async def delete_thread(
         await session.delete(thread)
         await session.commit()
     return {"message": "deleted"}
+
+
+@router.post("/{capture_id}/threads/batch-delete")
+async def batch_delete_threads(
+    capture_id: uuid.UUID,
+    body: ChatThreadBatchDelete,
+    user: User = Depends(get_current_user),
+):
+    if not body.thread_ids:
+        raise HTTPException(status_code=422, detail="thread_ids must not be empty")
+    async with async_session() as session:
+        await _get_owned_capture(session, capture_id, user)
+        query = delete(ChatThread).where(
+            ChatThread.id.in_(body.thread_ids),
+            ChatThread.capture_id == capture_id,
+        )
+        if user.role != "super_admin":
+            query = query.where(ChatThread.user_id == user.id)
+        result = await session.execute(query)
+        await session.commit()
+    return {"deleted": result.rowcount}
 
 
 @router.post("/{capture_id}/threads/{thread_id}/messages")
@@ -278,6 +313,7 @@ async def post_message(
                 )
 
         session.add(ChatMessage(thread_id=thread_id, role="user", content=question))
+        thread.updated_at = func.now()
         await session.commit()
 
         context = await _build_context(session, capture)

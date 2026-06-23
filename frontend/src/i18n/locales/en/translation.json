@@ -304,7 +304,17 @@
     "selectedAsContext": "{{count}} packet(s) selected as context",
     "askPlaceholder": "Ask about the selected packets...",
     "newChat": "New chat",
-    "chatFailed": "Chat request failed."
+    "chatFailed": "Chat request failed.",
+    "sessionHistory": "Session history",
+    "sessions": "Sessions",
+    "noSessions": "No past sessions",
+    "deleteSelected": "Delete selected ({{count}})",
+    "deleteSelectedConfirm": "Delete {{count}} session(s)? This cannot be undone.",
+    "selectSessions": "Select",
+    "cancelSelection": "Cancel",
+    "deleteSuccess": "{{count}} session(s) deleted",
+    "deleteFailed": "Failed to delete sessions",
+    "messagesCount": "{{count}} msgs"
   },
   "followStream": {
     "title": "Follow Stream",
