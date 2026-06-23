@@ -24,6 +24,7 @@ Runs on `http://localhost:5173`, proxies `/api` and `/auth` to backend at `local
 - `SessionView`, `SessionSequenceDiagram`, `SessionDataFlow` — modal session inspector launched from the Conversations table. Sequence mode requests up to 5000 packets at offset 0; data-flow mode paginates with detail panes powered by `getPacketDetail`. Pass both `country_code` and `country_flag` into `FlagIcon` whenever rendering `GeoInfo`.
 - `FollowStream` — modal that reconstructs one TCP/UDP conversation's payload (ASCII or hex view), client vs server color-coded; truncation banner when the 1 MB/direction cap is hit.
 - `CaptureCommandPanel` — dockable panel that hosts two modes (tabs): `CaptureCommandBuilder` (form-driven tcpdump/pktmon command with shell-escaped args + live preview + Copy) and `CaptureCommandAIGenerator` (natural-language → tcpdump/pktmon command via `/api/capture-command/generate` SSE; optional capture context). Panel keeps a shared `command` state but clears it on tab switch and at AI-generate start so a stale command can't be copied. Can pop out into a `FloatingWindow`.
+- `AIChatPanel` and `ChatSessionSidebar` — persisted capture chat UI. The sidebar lists per-user sessions ordered by backend `updated_at`, supports resume/new-chat flows, and has selection mode for batch delete. When `AIChatPanel` creates a new thread, keep the local sidebar list fresh immediately instead of waiting for a long stream to finish.
 - `HelpTooltip` — portal-based help popover for compact labels; hover is transient, while click/focus stays open until blur, Escape, or outside pointer. Keep viewport positioning clamped for narrow panes/floating windows.
 - `FloatingWindow` — draggable floating window wrapper used to pop out the Capture Command panel.
 
@@ -42,7 +43,7 @@ Runs on `http://localhost:5173`, proxies `/api` and `/auth` to backend at `local
 - `frontend/src/api/client.ts` exports an axios instance (`baseURL: "/"`, `withCredentials: true`) and typed helpers for all backend endpoints.
 - The axios interceptor hard-redirects to `/login` on 401 unless already on `/login`.
 - Admin helpers are `listAllowedUsers`, `addAllowedUser`, `removeAllowedUser`, and `updateAllowedUserRole`; capture listing accepts `{ all?: boolean; owner?: string }`.
-- Chat streaming uses `fetch` + a `ReadableStream` reader (not `EventSource`, which can't POST) so the caller can pass an `AbortSignal` for the Stop button; SSE frames are split on `\n\n` and `[DONE]` terminates the stream.
+- Chat helpers include thread list/create/get/delete, `batchDeleteChatThreads`, and streaming messages. Chat streaming uses `fetch` + a `ReadableStream` reader (not `EventSource`, which can't POST) so the caller can pass an `AbortSignal` for the Stop button; SSE frames are split on `\n\n` and `[DONE]` terminates the stream.
 - `packetsExportUrl(...)` builds a direct browser-download URL (cookie auth rides along on the GET) honoring active `proto`/`q` filters.
 - Pages use TanStack Query for data fetching, caching, and invalidation.
 

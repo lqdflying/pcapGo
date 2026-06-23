@@ -138,6 +138,10 @@ export function AIChatPanel({ captureId }: Props) {
         const thread = await createChatThread(captureId);
         tid = thread.id;
         setThreadId(tid);
+        setThreads((prev) => {
+          const withoutDuplicate = prev.filter((item) => item.id !== thread.id);
+          return [thread, ...withoutDuplicate];
+        });
       }
 
       setStreamingText("");

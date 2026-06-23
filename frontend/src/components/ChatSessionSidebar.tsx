@@ -50,6 +50,12 @@ export function ChatSessionSidebar({
     setSelected(new Set());
   };
 
+  const allSelected = threads.length > 0 && selected.size === threads.length;
+
+  const toggleSelectAll = () => {
+    setSelected(allSelected ? new Set() : new Set(threads.map((thread) => thread.id)));
+  };
+
   const handleBatchDelete = () => {
     if (selected.size === 0) return;
     const msg = t("chat.deleteSelectedConfirm", { count: selected.size });
@@ -67,12 +73,22 @@ export function ChatSessionSidebar({
         </span>
         <div className="flex items-center gap-0.5">
           {selectMode ? (
-            <button
-              onClick={exitSelectMode}
-              className="rounded px-1.5 py-0.5 text-[10px] text-panel-muted hover:bg-panel-border hover:text-panel-text"
-            >
-              {t("chat.cancelSelection")}
-            </button>
+            <>
+              {threads.length > 0 && (
+                <button
+                  onClick={toggleSelectAll}
+                  className="rounded px-1.5 py-0.5 text-[10px] text-panel-muted hover:bg-panel-border hover:text-panel-text"
+                >
+                  {allSelected ? t("chat.deselectAll") : t("chat.selectAll")}
+                </button>
+              )}
+              <button
+                onClick={exitSelectMode}
+                className="rounded px-1.5 py-0.5 text-[10px] text-panel-muted hover:bg-panel-border hover:text-panel-text"
+              >
+                {t("chat.cancelSelection")}
+              </button>
+            </>
           ) : (
             <button
               onClick={() => setSelectMode(true)}

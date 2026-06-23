@@ -192,9 +192,17 @@ class TestMigration0002:
     def test_chat_threads_columns(self):
         table = Base.metadata.tables["chat_threads"]
         column_names = {c.name for c in table.columns}
-        assert {"id", "capture_id", "title", "created_at"}.issubset(column_names)
+        assert {
+            "id",
+            "capture_id",
+            "user_id",
+            "title",
+            "created_at",
+            "updated_at",
+        }.issubset(column_names)
         fk_cols = [c.name for c in table.columns if c.foreign_keys]
         assert "capture_id" in fk_cols
+        assert "user_id" in fk_cols
 
     def test_chat_messages_columns(self):
         table = Base.metadata.tables["chat_messages"]
@@ -238,3 +246,21 @@ class TestMigration0003:
         assert index is not None
         assert index.unique is True
         assert "lower" in str(index.expressions[0]).lower()
+
+
+class TestMigration0004:
+    """The chat-session migration must define thread ownership metadata."""
+
+    def test_migration_version_exists(self):
+        root = Path(__file__).parent.parent.parent
+        migration_path = (
+            root / "backend" / "alembic" / "versions" / "0004_chat_thread_user_id.py"
+        )
+        assert migration_path.exists()
+
+    def test_chat_thread_user_id_index(self):
+        table = Base.metadata.tables["chat_threads"]
+        indexes = {idx.name: idx for idx in table.indexes}
+        index = indexes.get("ix_chat_threads_user_id")
+        assert index is not None
+        assert [column.name for column in index.columns] == ["user_id"]

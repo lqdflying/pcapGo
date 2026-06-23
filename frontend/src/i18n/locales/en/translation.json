@@ -311,6 +311,8 @@
     "deleteSelected": "Delete selected ({{count}})",
     "deleteSelectedConfirm": "Delete {{count}} session(s)? This cannot be undone.",
     "selectSessions": "Select",
+    "selectAll": "All",
+    "deselectAll": "None",
     "cancelSelection": "Cancel",
     "deleteSuccess": "{{count}} session(s) deleted",
     "deleteFailed": "Failed to delete sessions",

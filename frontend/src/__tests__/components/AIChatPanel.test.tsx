@@ -22,7 +22,7 @@ const mockCreateChatThread = vi.mocked(createChatThread);
 const mockStreamChatMessage = vi.mocked(streamChatMessage);
 const mockListChatThreads = vi.mocked(listChatThreads);
 const mockGetChatThread = vi.mocked(getChatThread);
-const _mockBatchDelete = vi.mocked(batchDeleteChatThreads);
+const mockBatchDelete = vi.mocked(batchDeleteChatThreads);
 
 describe("AIChatPanel", () => {
   beforeEach(() => {
@@ -54,7 +54,7 @@ describe("AIChatPanel", () => {
         { id: "m2", role: "assistant", content: "hi there", created_at: "2026-06-21T00:00:01.000Z" },
       ],
     });
-    _mockBatchDelete.mockResolvedValue({ deleted: 1 });
+    mockBatchDelete.mockResolvedValue({ deleted: 1 });
   });
 
   it("sends selected packet indices as chat context", async () => {
@@ -245,5 +245,142 @@ describe("AIChatPanel", () => {
     });
     expect(screen.getByText("hello")).toBeInTheDocument();
     expect(screen.getByText("hi there")).toBeInTheDocument();
+  });
+
+  it("adds a newly created thread to the sidebar before streaming finishes", async () => {
+    mockCreateChatThread.mockResolvedValue({
+      id: "thread-new",
+      title: "New chat",
+      created_at: "2026-06-21T00:00:00.000Z",
+      updated_at: "2026-06-21T00:00:00.000Z",
+      message_count: 0,
+    });
+    mockStreamChatMessage.mockImplementation(async (_captureId, _threadId, _content, opts) => {
+      await new Promise<void>((resolve) => {
+        opts.signal?.addEventListener("abort", () => resolve(), { once: true });
+      });
+    });
+    render(<AIChatPanel captureId="cap-1" />);
+
+    fireEvent.click(screen.getByLabelText("Session history"));
+    fireEvent.change(screen.getByLabelText("Ask about packets"), {
+      target: { value: "long question" },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Send"));
+    });
+
+    await waitFor(() => {
+      expect(mockCreateChatThread).toHaveBeenCalledWith("cap-1");
+    });
+    expect(screen.getByText("New chat")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Stop"));
+    });
+  });
+
+  it("selecting a session clears transient streaming text and errors", async () => {
+    mockListChatThreads.mockResolvedValue([
+      {
+        id: "thread-1",
+        title: "Past chat",
+        created_at: "2026-06-21T00:00:00.000Z",
+        updated_at: "2026-06-21T00:00:00.000Z",
+        message_count: 2,
+      },
+    ]);
+    mockStreamChatMessage.mockImplementation(async (_captureId, _threadId, _content, opts) => {
+      opts.onError?.("stream failed");
+      opts.onDelta("partial reply");
+      throw new Error("aborted");
+    });
+    render(<AIChatPanel captureId="cap-1" />);
+
+    fireEvent.change(screen.getByLabelText("Ask about packets"), {
+      target: { value: "show an error" },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Send"));
+    });
+    expect(await screen.findByText("stream failed")).toBeInTheDocument();
+    expect(screen.getByText("partial reply")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Session history"));
+    fireEvent.click(await screen.findByText("Past chat"));
+
+    await waitFor(() => {
+      expect(mockGetChatThread).toHaveBeenCalledWith("cap-1", "thread-1");
+    });
+    expect(screen.queryByText("stream failed")).not.toBeInTheDocument();
+    expect(screen.queryByText("partial reply")).not.toBeInTheDocument();
+    expect(screen.getByText("hello")).toBeInTheDocument();
+  });
+
+  it("batch deletes selected sessions and clears the active thread", async () => {
+    mockListChatThreads.mockResolvedValue([
+      {
+        id: "thread-1",
+        title: "Past chat",
+        created_at: "2026-06-21T00:00:00.000Z",
+        updated_at: "2026-06-21T00:00:00.000Z",
+        message_count: 2,
+      },
+    ]);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<AIChatPanel captureId="cap-1" />);
+
+    fireEvent.click(screen.getByLabelText("Session history"));
+    fireEvent.click(await screen.findByText("Past chat"));
+    await screen.findByText("hello");
+
+    fireEvent.click(screen.getByTitle("Select"));
+    fireEvent.click(screen.getByText("Past chat"));
+    fireEvent.click(screen.getByText("Delete selected (1)"));
+
+    await waitFor(() => {
+      expect(mockBatchDelete).toHaveBeenCalledWith("cap-1", ["thread-1"]);
+    });
+    expect(screen.queryByText("hello")).not.toBeInTheDocument();
+    expect(screen.getByText(/Ask questions about/)).toBeInTheDocument();
+  });
+
+  it("selects and deselects all sessions from the sidebar header", async () => {
+    mockListChatThreads.mockResolvedValue([
+      {
+        id: "thread-1",
+        title: "First chat",
+        created_at: "2026-06-21T00:00:00.000Z",
+        updated_at: "2026-06-21T00:00:00.000Z",
+        message_count: 2,
+      },
+      {
+        id: "thread-2",
+        title: "Second chat",
+        created_at: "2026-06-21T00:00:00.000Z",
+        updated_at: "2026-06-21T00:01:00.000Z",
+        message_count: 4,
+      },
+    ]);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<AIChatPanel captureId="cap-1" />);
+
+    fireEvent.click(screen.getByLabelText("Session history"));
+    await screen.findByText("First chat");
+    fireEvent.click(screen.getByTitle("Select"));
+
+    fireEvent.click(screen.getByText("All"));
+    expect(screen.getByText("Delete selected (2)")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Delete selected (2)"));
+    await waitFor(() => {
+      expect(mockBatchDelete).toHaveBeenCalledWith("cap-1", ["thread-1", "thread-2"]);
+    });
+
+    mockBatchDelete.mockClear();
+    fireEvent.click(screen.getByTitle("Select"));
+    fireEvent.click(screen.getByText("All"));
+    fireEvent.click(screen.getByText("None"));
+    expect(screen.queryByText(/Delete selected/)).not.toBeInTheDocument();
+    expect(mockBatchDelete).not.toHaveBeenCalled();
   });
 });

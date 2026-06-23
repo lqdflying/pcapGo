@@ -311,6 +311,8 @@
     "deleteSelected": "删除选中 ({{count}})",
     "deleteSelectedConfirm": "删除 {{count}} 个会话？此操作无法撤销。",
     "selectSessions": "选择",
+    "selectAll": "全选",
+    "deselectAll": "全不选",
     "cancelSelection": "取消",
     "deleteSuccess": "已删除 {{count}} 个会话",
     "deleteFailed": "删除会话失败",
