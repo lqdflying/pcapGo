@@ -114,7 +114,7 @@ frontend/src/__tests__/
 │   ├── PacketTree.test.tsx            # Protocol layer tree expand/collapse + layer selection highlights hex
 │   ├── HexViewer.test.tsx             # Hex/ASCII dump formatting + highlighted byte ranges
 │   ├── StatsTabs.test.tsx             # Statistics tab navigation + Tx/Rx columns + IO graph controls
-│   ├── ConversationsView.test.tsx     # Conversations table sorting/filtering + Session/Follow actions
+│   ├── ConversationsView.test.tsx     # Conversations table sorting/filtering, IP-pair grouping/expansion + Session/Follow actions
 │   ├── SessionView.test.tsx           # Session modal query construction, tab switching, GeoIP fallback, Filter packets callback
 │   ├── SessionSequenceDiagram.test.tsx # Virtualized sequence timeline + endpoint badges
 │   ├── SessionDataFlow.test.tsx       # Session packet table, pagination, detail panes, GeoIP fallback

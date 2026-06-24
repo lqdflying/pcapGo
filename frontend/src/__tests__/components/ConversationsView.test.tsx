@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { ConversationsView } from "@/components/stats/ConversationsView";
 import type { ConversationStats } from "@/api/client";
 
@@ -79,6 +80,52 @@ const groupableConvs: ConversationStats[] = [
   },
 ];
 
+const mixedProtocolConvs: ConversationStats[] = [
+  {
+    ...groupableConvs[0],
+    id: "m1",
+    app_protocol: "TLS",
+    packet_count: 4,
+  },
+  {
+    ...groupableConvs[1],
+    id: "m2",
+    app_protocol: "HTTP",
+    packet_count: 6,
+  },
+];
+
+const sortingConvs: ConversationStats[] = [
+  {
+    ...groupableConvs[0],
+    id: "low-a",
+    src_ip: "10.0.0.1",
+    dst_ip: "10.0.0.2",
+    packet_count: 2,
+  },
+  {
+    ...groupableConvs[1],
+    id: "low-b",
+    src_ip: "10.0.0.1",
+    dst_ip: "10.0.0.2",
+    packet_count: 3,
+  },
+  {
+    ...groupableConvs[0],
+    id: "high-a",
+    src_ip: "10.0.0.5",
+    dst_ip: "10.0.0.6",
+    packet_count: 20,
+  },
+  {
+    ...groupableConvs[1],
+    id: "high-b",
+    src_ip: "10.0.0.5",
+    dst_ip: "10.0.0.6",
+    packet_count: 10,
+  },
+];
+
 describe("ConversationsView", () => {
   it("renders conversation table", () => {
     render(<ConversationsView conversations={convs} />);
@@ -139,73 +186,140 @@ describe("ConversationsView", () => {
     expect(screen.getByText("SYN,ACK")).toBeInTheDocument();
   });
 
-  it("shows group toggle button", () => {
+  it("shows group toggle button with pressed state", () => {
     render(<ConversationsView conversations={convs} />);
-    expect(screen.getByText("Group by IP pair")).toBeInTheDocument();
+    const toggle = screen.getByRole("button", { name: "Group by IP pair" });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
   });
 
   it("groups by IP pair when toggled", () => {
     render(<ConversationsView conversations={groupableConvs} />);
-    fireEvent.click(screen.getByText("Group by IP pair"));
+    fireEvent.click(screen.getByRole("button", { name: "Group by IP pair" }));
 
-    // Individual port-level rows for the grouped pair should not be visible
     expect(screen.queryByText("10.0.0.1:443")).not.toBeInTheDocument();
     expect(screen.queryByText("10.0.0.2:54321")).not.toBeInTheDocument();
     expect(screen.queryByText("10.0.0.2:54322")).not.toBeInTheDocument();
 
-    // Group header shows IP only
     expect(screen.getByText("10.0.0.1")).toBeInTheDocument();
     expect(screen.getByText("10.0.0.2")).toBeInTheDocument();
-
-    // Flow count badge
     expect(screen.getByText("2 flows")).toBeInTheDocument();
-
-    // Singleton (10.0.0.3→10.0.0.4) still renders as flat row with port
     expect(screen.getByText("10.0.0.3:53")).toBeInTheDocument();
   });
 
-  it("expands group to show children", () => {
+  it("expands group to show children through the accessible button", async () => {
+    const user = userEvent.setup();
     render(<ConversationsView conversations={groupableConvs} />);
-    fireEvent.click(screen.getByText("Group by IP pair"));
+    await user.click(screen.getByRole("button", { name: "Group by IP pair" }));
 
-    // Click the group row to expand
-    const groupRow = screen.getByText("10.0.0.1").closest("tr")!;
-    fireEvent.click(groupRow);
+    const expandButton = screen.getByRole("button", {
+      name: "Expand conversation group 10.0.0.1 to 10.0.0.2",
+    });
+    expect(expandButton).toHaveAttribute("aria-expanded", "false");
 
-    // Children should now be visible with full ip:port
+    expandButton.focus();
+    await user.keyboard("{Enter}");
+
+    expect(
+      screen.getByRole("button", {
+        name: "Collapse conversation group 10.0.0.1 to 10.0.0.2",
+      })
+    ).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("10.0.0.2:54321")).toBeInTheDocument();
     expect(screen.getByText("10.0.0.2:54322")).toBeInTheDocument();
   });
 
-  it("action buttons appear on child rows, not group rows", () => {
+  it("keeps delimiter-like endpoint strings in distinct IP-pair groups", () => {
+    const collisionConvs: ConversationStats[] = [
+      {
+        ...groupableConvs[0],
+        id: "pipe-a",
+        src_ip: "a|b",
+        src_port: 1111,
+        dst_ip: "c",
+        dst_port: 2222,
+      },
+      {
+        ...groupableConvs[1],
+        id: "pipe-b",
+        src_ip: "a",
+        src_port: 3333,
+        dst_ip: "b|c",
+        dst_port: 4444,
+      },
+    ];
+
+    render(<ConversationsView conversations={collisionConvs} />);
+    fireEvent.click(screen.getByRole("button", { name: "Group by IP pair" }));
+
+    expect(screen.queryByText("2 flows")).not.toBeInTheDocument();
+    expect(screen.getByText("a|b:1111")).toBeInTheDocument();
+    expect(screen.getByText("c:2222")).toBeInTheDocument();
+    expect(screen.getByText("a:3333")).toBeInTheDocument();
+    expect(screen.getByText("b|c:4444")).toBeInTheDocument();
+  });
+
+  it("shows mixed protocol label for grouped conversations with multiple apps", () => {
+    render(<ConversationsView conversations={mixedProtocolConvs} />);
+    fireEvent.click(screen.getByRole("button", { name: "Group by IP pair" }));
+
+    expect(screen.getByText("mixed (2)")).toBeInTheDocument();
+  });
+
+  it("sorts grouped rows by aggregate packet count", () => {
+    render(<ConversationsView conversations={sortingConvs} />);
+    fireEvent.click(screen.getByRole("button", { name: "Group by IP pair" }));
+
+    let rows = screen.getAllByRole("row");
+    expect(rows[1]).toHaveTextContent("10.0.0.5");
+    expect(rows[1]).toHaveTextContent("30");
+
+    fireEvent.click(screen.getByText("Pkts"));
+    rows = screen.getAllByRole("row");
+    expect(rows[1]).toHaveTextContent("10.0.0.1");
+    expect(rows[1]).toHaveTextContent("5");
+  });
+
+  it("action callbacks receive expanded child rows, not aggregate group rows", async () => {
+    const user = userEvent.setup();
     const onView = vi.fn();
+    const onFollow = vi.fn();
     render(
-      <ConversationsView conversations={groupableConvs} onViewSession={onView} />
+      <ConversationsView
+        conversations={groupableConvs}
+        onViewSession={onView}
+        onFollowConversation={onFollow}
+      />
     );
-    fireEvent.click(screen.getByText("Group by IP pair"));
+    await user.click(screen.getByRole("button", { name: "Group by IP pair" }));
 
-    // Group row should not have Session buttons (only the singleton has one)
-    const sessionButtons = screen.getAllByText("Session");
-    expect(sessionButtons).toHaveLength(1); // only the singleton
+    expect(screen.getAllByText("Session")).toHaveLength(1);
+    expect(screen.getAllByText("Follow")).toHaveLength(1);
 
-    // Expand the group
-    const groupRow = screen.getByText("10.0.0.1").closest("tr")!;
-    fireEvent.click(groupRow);
+    await user.click(
+      screen.getByRole("button", {
+        name: "Expand conversation group 10.0.0.1 to 10.0.0.2",
+      })
+    );
 
-    // Now child rows should also have Session buttons
-    const sessionButtonsAfter = screen.getAllByText("Session");
-    expect(sessionButtonsAfter.length).toBeGreaterThan(1);
+    const childDestination = screen.getByText("10.0.0.2:54321");
+    const childRow = childDestination.closest("tr")!;
+    await user.click(within(childRow).getByText("Session"));
+    await user.click(within(childRow).getByText("Follow"));
+
+    expect(onView).toHaveBeenCalledWith(groupableConvs[0]);
+    expect(onFollow).toHaveBeenCalledWith(groupableConvs[0]);
   });
 
   it("ungrouping restores original view", () => {
     render(<ConversationsView conversations={groupableConvs} />);
 
-    // Toggle on
-    fireEvent.click(screen.getByText("Group by IP pair"));
+    fireEvent.click(screen.getByRole("button", { name: "Group by IP pair" }));
     expect(screen.queryByText("10.0.0.1:443")).not.toBeInTheDocument();
 
-    // Toggle off
-    fireEvent.click(screen.getByText("Group by IP pair"));
+    fireEvent.click(screen.getByRole("button", { name: "Group by IP pair" }));
     expect(screen.getAllByText("10.0.0.1:443")).toHaveLength(2);
     expect(screen.getByText("10.0.0.2:54321")).toBeInTheDocument();
     expect(screen.getByText("10.0.0.2:54322")).toBeInTheDocument();

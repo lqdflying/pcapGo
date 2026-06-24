@@ -16,7 +16,7 @@ A self-hosted web application for uploading and analyzing network packet capture
 - **Follow TCP/UDP Stream**: reconstruct a conversation's payload (ASCII/hex), client vs server
 - **Export**: download the current (filtered) packet list as CSV or JSON
 - **Statistics**: protocol hierarchy with percentages, sortable/filterable endpoints &
-  conversations, and an IO graph with tooltips — click an endpoint/conversation to filter the packet list
+  conversations with expandable IP-pair grouping, and an IO graph with tooltips — click an endpoint/conversation to filter the packet list
 - **AI Analysis**:
   - **Chat** — ask free-form questions about a capture (scoped to packet/network analysis),
     with persisted conversation threads and a **Stop** button to halt generation

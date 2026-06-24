@@ -41,10 +41,14 @@ function formatDur(d: number) {
   return `${d.toFixed(2)} s`;
 }
 
+function groupKeyFor(c: ConversationStats) {
+  return JSON.stringify([c.src_ip, c.dst_ip]);
+}
+
 function buildGroups(convs: ConversationStats[]): Map<string, IPPairGroup> {
   const groups = new Map<string, IPPairGroup>();
   for (const c of convs) {
-    const key = `${c.src_ip}|${c.dst_ip}`;
+    const key = groupKeyFor(c);
     let g = groups.get(key);
     if (!g) {
       g = {
@@ -239,6 +243,8 @@ export function ConversationsView({
           />
         </div>
         <button
+          type="button"
+          aria-pressed={grouped}
           onClick={() => {
             setGrouped((g) => !g);
             setExpandedGroups(new Set());
@@ -286,16 +292,23 @@ export function ConversationsView({
                 return (
                   <tr
                     key={`group-${g.groupKey}`}
-                    className="cursor-pointer border-t border-panel-border bg-panel-header/30 hover:bg-panel-accent/5"
-                    onClick={() => toggleGroup(g.groupKey)}
+                    className="border-t border-panel-border bg-panel-header/30 hover:bg-panel-accent/5"
                   >
                     <td className="whitespace-nowrap px-2 py-1.5 font-mono">
-                      <span className="mr-1 inline-flex items-center">
-                        {expanded
-                          ? <ChevronDown className="h-3 w-3 text-panel-muted" />
-                          : <ChevronRight className="h-3 w-3 text-panel-muted" />}
-                      </span>
-                      {g.src_ip}
+                      <button
+                        type="button"
+                        aria-expanded={expanded}
+                        aria-label={`${expanded ? "Collapse" : "Expand"} conversation group ${g.src_ip} to ${g.dst_ip}`}
+                        onClick={() => toggleGroup(g.groupKey)}
+                        className="inline-flex items-center rounded text-left hover:text-panel-accent focus:outline-none focus:ring-1 focus:ring-panel-accent"
+                      >
+                        <span className="mr-1 inline-flex items-center" aria-hidden="true">
+                          {expanded
+                            ? <ChevronDown className="h-3 w-3 text-panel-muted" />
+                            : <ChevronRight className="h-3 w-3 text-panel-muted" />}
+                        </span>
+                        <span>{g.src_ip}</span>
+                      </button>
                     </td>
                     <td className="whitespace-nowrap px-2 py-1.5 font-mono">
                       {g.dst_ip}
