@@ -202,7 +202,10 @@
     "countryCount": "{{count}} 个国家",
     "ipStatsCount": "{{count}} 个IP",
     "noCountries": "暂无国家数据",
-    "countryStatsHint": "国家统计按端点参与聚合。一个会话可按两个端点分别计入，因此当双方位于同一国家时，总数可能高于捕获级别的包数或会话数。"
+    "countryStatsHint": "国家统计按端点参与聚合。一个会话可按两个端点分别计入，因此当双方位于同一国家时，总数可能高于捕获级别的包数或会话数。",
+    "groupByIpPair": "按IP对分组",
+    "flowCount": "{{count}} 个流",
+    "mixed": "混合 ({{count}})"
   },
   "session": {
     "title": "会话视图",
