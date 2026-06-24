@@ -202,7 +202,10 @@
     "countryCount": "{{count}} countries",
     "ipStatsCount": "{{count}} IPs",
     "noCountries": "No country data available",
-    "countryStatsHint": "Country rows aggregate endpoint participation. A conversation can contribute once per endpoint, so totals can exceed capture-wide packet or session counts when both endpoints are in the same country."
+    "countryStatsHint": "Country rows aggregate endpoint participation. A conversation can contribute once per endpoint, so totals can exceed capture-wide packet or session counts when both endpoints are in the same country.",
+    "groupByIpPair": "Group by IP pair",
+    "flowCount": "{{count}} flows",
+    "mixed": "mixed ({{count}})"
   },
   "session": {
     "title": "Session View",
